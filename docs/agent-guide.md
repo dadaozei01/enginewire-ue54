@@ -1,11 +1,15 @@
 # Agent 正常使用 MCP 插件
 
+统一规则：优先已验证的 EngineWire MCP；成熟批量任务可用编辑器内 UE Python；独立 Remote Execution 备用。MCP 提供 Python 执行能力时可沿现有连接执行，不必另开网络桥；不安装或依赖任务按钮。
+
+跨 Agent 共享操作规范见 [ue-ai-bridge-protocol](https://github.com/dadaozei01/ue-ai-bridge-protocol/blob/main/docs/agent-entry.md)，本页负责 EngineWire 的具体调用方式。
+
 ## 连接
 
 1. 确认目标工程和引擎版本，避免连错同时打开的 UE。先检查工程已有自动化入口，保留原有入口。
 2. 启用 EngineWire 的 Native MCP Server 并重启 UE。默认端点：http://127.0.0.1:3000/mcp。8090/8091 是其他传输端口，不是这里的原生 HTTP。
 3. 请求头 X-MCP-Capability-Token 从目标工程 Saved/MCP/capability-token 动态读取。不要打印、粘贴到对话或提交令牌；不要为连接开放公网。
-4. 配置 Agent 的 HTTP MCP 客户端，重新加载客户端。首先只读查询工程或 Actor，确认连到正确项目后再写入。
+4. 配置 Agent 的 HTTP MCP 客户端，重新加载客户端。首先只读核对目标工程绝对路径、实际引擎版本和编辑器 PID，必须唯一匹配用户指定目标；不能仅凭同名 Actor 判断。身份不能确认时停止写入并澄清。
 
 ## 工具调用
 

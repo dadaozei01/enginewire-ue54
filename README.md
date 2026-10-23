@@ -13,7 +13,13 @@
 
 状态显示 MCP :3000 (0) 表示服务已启动，0 是连接客户端数量。勾选后仍显示 off 时先确认重启。
 
-## 平台状态
+## 统一操作规则
+
+已验证的 EngineWire MCP 优先；成熟批量任务可用编辑器内 UE Python；独立 Remote Execution 备用。正常接入不需要任务按钮，也不要求另开 Python 网络连接。
+
+跨 Agent 的共享规范以 [ue-ai-bridge-protocol](https://github.com/dadaozei01/ue-ai-bridge-protocol/blob/main/docs/agent-entry.md) 为准；本仓库负责插件安装、编译包与客户端接入细节。
+
+## 平台验证
 
 | 平台 | 状态 |
 |---|---|
