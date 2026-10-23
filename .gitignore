@@ -1,0 +1,10 @@
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+build/
+dist/
+*.pdb
+*.dSYM/
+.env
+capability-token
