@@ -24,5 +24,6 @@
 
 - [其他 Agent 如何连接并操作](docs/agent-guide.md)
 - [Codex 配置与认证](docs/codex.md)
+- [Claude Code 配置与认证](docs/claude-code.md)
 - [Windows / Mac 编译方法](docs/build.md)
 - [来源、兼容修改与验证范围](UPSTREAM.md)
