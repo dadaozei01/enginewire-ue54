@@ -89,6 +89,14 @@
 
 #include "Sound/ReverbEffect.h"
 
+// Apple clang 17+ (Xcode 26.4+) rejects UE 5.4 MetaSound headers: -Wextra-qualification under -Werror
+// and the default-error -Wmissing-template-arg-list-after-template-kw.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wextra-qualification"
+#pragma clang diagnostic ignored "-Wunknown-warning-option"
+#pragma clang diagnostic ignored "-Wmissing-template-arg-list-after-template-kw"
+#endif
 #if __has_include("MetasoundSource.h")
 #include "MetasoundSource.h"
 #define MCP_HAS_METASOUND 1
@@ -119,6 +127,10 @@
 #else
 #define MCP_HAS_METASOUND_FRONTEND 0
 #define MCP_HAS_METASOUND_FRONTEND_V2 0
+#endif
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
 #endif
 
 // A document builder over a MetaSound: the one the engine already holds for it

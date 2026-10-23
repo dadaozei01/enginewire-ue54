@@ -17,7 +17,15 @@ xcode-select -p
 "/Users/Shared/Epic Games/UE_5.4/Engine/Build/BatchFiles/RunUAT.sh" BuildPlugin -Plugin="$HOME/tools/enginewire-ue54/plugins/EngineWire/EngineWire.uplugin" -Package="$HOME/Builds/EngineWire-UE54-Mac" -TargetPlatforms=Mac
 ```
 
-Mac 命令尚未实机验证，架构由 UE/Xcode 配置决定；对生成 dylib 执行 lipo -info，不能未验证就标记 Universal。实际加载并验证 MCP 后再打包上传。不要把 Windows DLL 复制为 Mac 产物。
+2026-10-23 已在 Apple Silicon、UE 5.4.4、Xcode 27.0 上用上面的命令编译通过。UAT 默认按 arm64+x64 编译，lipo -info 显示两个 dylib 均为 x86_64 arm64。实际加载并验证 MCP 后再打包上传。不要把 Windows DLL 复制为 Mac 产物。
+
+Xcode 版本高于 UE 允许范围时，UBT 报 Platform Mac is not a valid platform to build。用下面的命令查看允许范围：
+
+```sh
+"/Users/Shared/Epic Games/UE_5.4/Engine/Build/BatchFiles/RunUAT.sh" Turnkey -command=VerifySdk -platform=Mac -UpdateIfNeeded=false
+```
+
+Status=Invalid 且 Current_Sdk 高于 MaxAllowed_Sdk 时，二选一：安装范围内的 Xcode 并用 xcode-select 切换；或备份 Engine/Config/Apple/Apple_SDK.json 后调高 MaxVersion（Xcode 27 用 27.9.0）。后者未经 Epic 验证，属于本机引擎配置，不随本仓库分发。
 
 发布包保留 EngineWire.uplugin、Source、Config、Resources、上游 Content（如存在）、Binaries 下运行所需文件及许可证，排除 Intermediate、Saved、PDB、dSYM 和用户资产。ZIP 根目录应为 EngineWire，生成 SHA-256 校验。
 

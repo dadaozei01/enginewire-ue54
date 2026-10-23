@@ -31,6 +31,12 @@ claude mcp add-json unreal '{"type":"http","url":"http://127.0.0.1:3000/mcp","he
 
 单引号内 $HOME 不会展开，请改成实际绝对路径。若 Claude Code 找不到 node，把 node 换成 which node 输出的绝对路径。
 
+没有 Node 时用同目录的 scripts/mcp-headers.py，macOS 自带的 /usr/bin/python3 即可：
+
+```sh
+claude mcp add-json unreal '{"type":"http","url":"http://127.0.0.1:3000/mcp","headersHelper":"/usr/bin/python3 \"/Users/you/tools/enginewire-ue54/scripts/mcp-headers.py\" \"/Users/you/UE/MyProject/MyProject.uproject\""}' --scope user
+```
+
 ## 作用域
 
 - --scope user：所有目录可用，适合长期只连一个工程。

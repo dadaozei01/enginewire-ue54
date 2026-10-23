@@ -10,7 +10,16 @@
 #include "Domains/AudioAuthoring/McpAudioAuthoringPrivate.h"
 
 #if MCP_HAS_METASOUND && MCP_HAS_METASOUND_FRONTEND
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wextra-qualification"
+#pragma clang diagnostic ignored "-Wunknown-warning-option"
+#pragma clang diagnostic ignored "-Wmissing-template-arg-list-after-template-kw"
+#endif
 #include "MetasoundFrontendDataTypeRegistry.h"
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 #include <type_traits>
 #include <utility>
 #endif

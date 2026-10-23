@@ -10,6 +10,15 @@ UE 5.4 修改：
 3. McpPCGGraph.cpp 两处 GetNodeTitle(EPCGNodeTitleType) 版本判断从 5.5 起改为 5.4 起。
 4. 按上游 UE 5.2+ 打包策略使用必需 PCG 依赖；Installed=true，EngineVersion=5.4.0，移除 EnabledByDefault。
 
+Mac 编译修改（新版 Apple clang 下才暴露，不影响 Windows）：
+
+5. McpAudioAuthoringPrivate.h、McpAudioMetaSoundDefaults.cpp 在引入引擎 MetaSound 头文件处用 clang pragma 临时忽略 -Wextra-qualification 和 -Wmissing-template-arg-list-after-template-kw；UE 5.4 的这些头文件在 Xcode 27 的 clang 下报错，不修改引擎文件。
+6. McpBPHudFlow.cpp 补充 McpBPAssetLoad.h 引用；它调用 LoadBlueprintAsset，Windows 上靠 Unity 合并编译间接可见，Mac 分组不同时报未声明。
+
 2026-10-23 Windows 构建环境：UE 5.4.4，MSVC 14.38.33145，SDK 10.0.18362.0。引擎与插件 BuildId 33043543。RunUAT 因本机无关 LightForge 插件规则扫描异常未完整通过；使用其生成的隔离 HostProject 直接 UBT 编译，参数 -DisablePlugin=LightForge，仅排除该插件而不修改其文件。UBT 退出 0，EngineWire、EngineWireFab DLL 链接成功，再整理发布包。
 
-已实测编辑器加载、Native MCP 与 Codex 连接、随机巡逻蓝图、蓝色门材质、蓝白 Niagara 拖尾。验证仅代表这些操作，不能代表上游所有能力。Mac 尚未编译或验证。本仓库不上传测试资产、私有场景、模型、专用动画、截图、认证文件或本机完整日志。
+已实测编辑器加载、Native MCP 与 Codex 连接、随机巡逻蓝图、蓝色门材质、蓝白 Niagara 拖尾。验证仅代表这些操作，不能代表上游所有能力。
+
+2026-10-23 Mac 构建环境：Apple Silicon，UE 5.4.4，Xcode 27.0（本机 Apple_SDK.json 的 MaxVersion 调到 27.9.0）。RunUAT BuildPlugin -TargetPlatforms=Mac 成功，EngineWire、EngineWireFab 为 Universal dylib，BuildId 33043543。安装到 Engine/Plugins/Marketplace 后已实测编辑器加载、Native MCP 启动于 127.0.0.1:3000、握手与 control_actor.list 只读查询；Mac 上的写入操作尚未验证。
+
+本仓库不上传测试资产、私有场景、模型、专用动画、截图、认证文件或本机完整日志。
