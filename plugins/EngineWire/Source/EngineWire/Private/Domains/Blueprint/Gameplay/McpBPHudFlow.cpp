@@ -4,6 +4,7 @@
 #include "Domains/BlueprintGraph/Behaviour/McpBPBehaviour.h"
 #include "Core/Requests/McpResponseCaptureRegistry.h"
 #include "Domains/WidgetAuthoring/Support/McpWidgetBPLoading.h"
+#include "Foundation/BridgeHelpers/Blueprints/McpBPAssetLoad.h"
 #include "Foundation/BridgeHelpers/Blueprints/McpBPCompileHelpers.h"
 #include "Foundation/BridgeHelpers/Blueprints/McpBPPaths.h"
 #include "Foundation/BridgeHelpers/Responses/McpJsonFields.h"
