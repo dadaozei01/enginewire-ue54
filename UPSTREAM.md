@@ -15,6 +15,10 @@ Mac 编译修改（新版 Apple clang 下才暴露，不影响 Windows）：
 5. McpAudioAuthoringPrivate.h、McpAudioMetaSoundDefaults.cpp 在引入引擎 MetaSound 头文件处用 clang pragma 临时忽略 -Wextra-qualification 和 -Wmissing-template-arg-list-after-template-kw；UE 5.4 的这些头文件在 Xcode 27 的 clang 下报错，不修改引擎文件。
 6. McpBPHudFlow.cpp 补充 McpBPAssetLoad.h 引用；它调用 LoadBlueprintAsset，Windows 上靠 Unity 合并编译间接可见，Mac 分组不同时报未声明。
 
+稳定性修复（各平台通用）：
+
+7. FMcpNativeTransport 关闭时的竞态：Shutdown 先 Stop() 关闭监听 socket，接受线程醒来后销毁该 socket；随后 Thread->Kill(true) 再次调用 Stop()，可能对已释放的 FSocket 调 Close()，编辑器退出时 SIGABRT（Mac 实际崩溃栈：UEngineWireSubsystem::Deinitialize → FMcpNativeTransport::Shutdown → FRunnableThreadPThread::Kill → abort）。现以 ListenSocketMutex 保护 Stop() 的关闭与接受线程的销毁，Shutdown 改用 WaitForCompletion()。2026-10-25 Mac 重新编译安装后已实测编辑器加载与只读 MCP；该崩溃为偶发，退出稳定性仍在观察。Windows 发布包尚未包含此修复。
+
 2026-10-23 Windows 构建环境：UE 5.4.4，MSVC 14.38.33145，SDK 10.0.18362.0。引擎与插件 BuildId 33043543。RunUAT 因本机无关 LightForge 插件规则扫描异常未完整通过；使用其生成的隔离 HostProject 直接 UBT 编译，参数 -DisablePlugin=LightForge，仅排除该插件而不修改其文件。UBT 退出 0，EngineWire、EngineWireFab DLL 链接成功，再整理发布包。
 
 已实测编辑器加载、Native MCP 与 Codex 连接、随机巡逻蓝图、蓝色门材质、蓝白 Niagara 拖尾。验证仅代表这些操作，不能代表上游所有能力。
