@@ -155,8 +155,14 @@ uint32 FMcpNativeTransport::Run()
 		}
 	}
 
-	// Cleanup listen socket
-	CloseSocket(ListenSocket);
+	// Cleanup listen socket (detached under the lock Stop() closes it under)
+	FSocket* SocketToClose = nullptr;
+	{
+		FScopeLock ListenLock(&ListenSocketMutex);
+		SocketToClose = ListenSocket;
+		ListenSocket = nullptr;
+	}
+	CloseSocket(SocketToClose);
 
 	UE_LOG(LogMcpNativeTransport, Verbose, TEXT("Accept loop exited"));
 	return 0;

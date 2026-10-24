@@ -271,6 +271,8 @@ private:
 
 	// Socket infrastructure
 	FSocket* ListenSocket = nullptr;
+	// Guards Stop()'s Close against the accept thread destroying ListenSocket on exit.
+	FCriticalSection ListenSocketMutex;
 	FRunnableThread* Thread = nullptr;
 	TFuture<void> KeepaliveLoopFuture;  // background keepalive thread (joined in Shutdown)
 	FEvent* StopEvent = nullptr;

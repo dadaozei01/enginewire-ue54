@@ -158,7 +158,7 @@ bool FMcpNativeTransport::Start(int32 Port, const FString& PluginDir, bool bLoad
 
 void FMcpNativeTransport::Stop()
 {
-	// FRunnable::Stop() — lightweight signal, called by Thread->Kill()
+	// FRunnable::Stop() — lightweight signal; may run more than once
 	{
 		FScopeLock SessionLock(&SessionMutex);
 		bStopping.store(true);
@@ -167,7 +167,9 @@ void FMcpNativeTransport::Stop()
 	{
 		StopEvent->Trigger();
 	}
-	// Close listen socket to unblock Accept()
+	// Close listen socket to unblock Accept(). Locked: once woken, the accept
+	// thread destroys the socket, and a second Stop() would close a freed one.
+	FScopeLock ListenLock(&ListenSocketMutex);
 	if (ListenSocket)
 	{
 		ListenSocket->Close();
@@ -178,10 +180,10 @@ void FMcpNativeTransport::Shutdown()
 {
 	Stop();  // Signal the accept thread
 
-	// Wait for accept thread to finish
+	// Wait for accept thread to finish. Not Kill(true): it calls Stop() again.
 	if (Thread)
 	{
-		Thread->Kill(true);  // Calls Stop() again (no-op — already signaled)
+		Thread->WaitForCompletion();
 		delete Thread;
 		Thread = nullptr;
 	}
