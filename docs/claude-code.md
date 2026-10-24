@@ -47,16 +47,15 @@ claude mcp add-json unreal '{"type":"http","url":"http://127.0.0.1:3000/mcp","he
 
 Saved/MCP/capability-token 是旧式全权限（Admin）令牌，插件日志会提示已弃用。helper 优先读取 Saved/MCP/scoped-capability-token，不存在时才回退旧令牌。作用域令牌只能取 Read、Write、Destructive，不能取 Admin；编辑器内 Python 只需 Write。
 
-1. 关闭 UE。编辑器运行时修改 Saved/Config 下的 ini 可能在退出时被覆盖，插件也只在启动时读取令牌配置。
+1. 关闭 UE。插件只在启动时读取令牌配置。
 2. 生成 64 位十六进制令牌，写入 Saved/MCP/scoped-capability-token，权限 600。
-3. 在 Saved/Config/<平台>Editor/Game.ini（Mac 为 MacEditor，Windows 为 WindowsEditor）追加下面一段，Token 换成同一个值。放在 Saved 而不是 Config/DefaultGame.ini，避免令牌随工程配置分发：
+3. 备份 Config/DefaultGame.ini，在已有的 [/Script/EngineWire.EngineWireSettings] 段内加一行，Token 换成同一个值：
 
 ```ini
-[/Script/EngineWire.EngineWireSettings]
-ScopedCapabilityTokens=(Profile="claude-code",Token="<64位十六进制>",Scopes=(Read,Write,Destructive))
++ScopedCapabilityTokens=(Profile="claude-code",Token="<64位十六进制>",Scopes=(Read,Write,Destructive))
 ```
 
-Saved 下的 ini 按普通读取加载，不处理 + / - 数组前缀，写成 +ScopedCapabilityTokens 会被当作另一个键而不生效；多个令牌就写多行同名的 ScopedCapabilityTokens=。
+令牌因此写在工程配置里：分享或提交工程前删掉这一行。不要放在 Saved/Config/<平台>Editor/Game.ini：Mac 上实测编辑器每次退出都会删除该文件；而且 Saved 下的 ini 不处理 + / - 数组前缀。
 
 4. 启动 UE 后重新连接 MCP。日志不再出现 deprecated all-or-nothing capability token 警告即生效。
 
