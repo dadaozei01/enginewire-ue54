@@ -11,7 +11,11 @@ def headers(project):
         raise ValueError('Specify a project path or UE_PROJECT_PATH')
     resolved = os.path.abspath(project)
     folder = os.path.dirname(resolved) if resolved.lower().endswith('.uproject') else resolved
-    with open(os.path.join(folder, 'Saved', 'MCP', 'capability-token'), encoding='utf-8') as f:
+    # Prefer the scoped token; the legacy all-or-nothing token is deprecated.
+    mcp_dir = os.path.join(folder, 'Saved', 'MCP')
+    scoped = os.path.join(mcp_dir, 'scoped-capability-token')
+    path = scoped if os.path.isfile(scoped) else os.path.join(mcp_dir, 'capability-token')
+    with open(path, encoding='utf-8') as f:
         token = f.read().strip()
     if not re.fullmatch(r'[a-fA-F0-9]{64}', token):
         raise ValueError('Invalid capability token format')
