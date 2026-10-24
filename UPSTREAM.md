@@ -25,4 +25,6 @@ Mac 编译修改（新版 Apple clang 下才暴露，不影响 Windows）：
 
 2026-10-23 Mac 构建环境：Apple Silicon，UE 5.4.4，Xcode 27.0（本机 Apple_SDK.json 的 MaxVersion 调到 27.9.0）。RunUAT BuildPlugin -TargetPlatforms=Mac 成功，EngineWire、EngineWireFab 为 Universal dylib，BuildId 33043543。安装到 Engine/Plugins/Marketplace 后已实测编辑器加载、Native MCP 启动于 127.0.0.1:3000、握手与 control_actor.list 只读查询；Mac 上的写入操作尚未验证。
 
+之后在 Mac 上已实测写入：蓝图创建与复制、组件、批量写图表、删节点与函数、生成 Actor、编辑器内 Python、PIE 与截图。其他写入能力首次使用后仍需检查结果。
+
 本仓库不上传测试资产、私有场景、模型、专用动画、截图、认证文件或本机完整日志。
