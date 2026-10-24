@@ -43,6 +43,25 @@ claude mcp add-json unreal '{"type":"http","url":"http://127.0.0.1:3000/mcp","he
 - --scope project：写入当前目录的 .mcp.json，适合每个 UE 工程各自配置。该文件含本机绝对路径，不要提交到公共仓库。
 - 切换 UE 工程时令牌不同，需要改 headersHelper 中的工程路径；先 claude mcp remove unreal -s user 再重新添加。
 
+## 作用域令牌
+
+Saved/MCP/capability-token 是旧式全权限（Admin）令牌，插件日志会提示已弃用。helper 优先读取 Saved/MCP/scoped-capability-token，不存在时才回退旧令牌。作用域令牌只能取 Read、Write、Destructive，不能取 Admin；编辑器内 Python 只需 Write。
+
+1. 关闭 UE。编辑器运行时修改 Saved/Config 下的 ini 可能在退出时被覆盖，插件也只在启动时读取令牌配置。
+2. 生成 64 位十六进制令牌，写入 Saved/MCP/scoped-capability-token，权限 600。
+3. 在 Saved/Config/<平台>Editor/Game.ini（Mac 为 MacEditor，Windows 为 WindowsEditor）追加下面一段，Token 换成同一个值。放在 Saved 而不是 Config/DefaultGame.ini，避免令牌随工程配置分发：
+
+```ini
+[/Script/EngineWire.EngineWireSettings]
+ScopedCapabilityTokens=(Profile="claude-code",Token="<64位十六进制>",Scopes=(Read,Write,Destructive))
+```
+
+Saved 下的 ini 按普通读取加载，不处理 + / - 数组前缀，写成 +ScopedCapabilityTokens 会被当作另一个键而不生效；多个令牌就写多行同名的 ScopedCapabilityTokens=。
+
+4. 启动 UE 后重新连接 MCP。日志不再出现 deprecated all-or-nothing capability token 警告即生效。
+
+旧令牌文件仍然有效，插件会在文件缺失时重新生成，不要靠删除它来吊销。
+
 ## 验证
 
 ```sh
