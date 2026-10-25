@@ -5,6 +5,7 @@
 #include "Domains/Blueprint/McpBPActionContext.h"
 #include "Domains/Blueprint/Gameplay/McpBPBehaviourPlans.h"
 #include "Domains/BlueprintGraph/Behaviour/McpBPBehaviour.h"
+#include "Foundation/BridgeHelpers/Blueprints/McpBPAssetLoad.h"
 #include "Foundation/BridgeHelpers/Responses/McpJsonFields.h"
 
 #include "Engine/Blueprint.h"
