@@ -13,7 +13,7 @@ UE 5.4 修改：
 Mac 编译修改（新版 Apple clang 下才暴露，不影响 Windows）：
 
 5. McpAudioAuthoringPrivate.h、McpAudioMetaSoundDefaults.cpp 在引入引擎 MetaSound 头文件处用 clang pragma 临时忽略 -Wextra-qualification 和 -Wmissing-template-arg-list-after-template-kw；UE 5.4 的这些头文件在 Xcode 27 的 clang 下报错，不修改引擎文件。
-6. McpBPHudFlow.cpp 补充 McpBPAssetLoad.h 引用；它调用 LoadBlueprintAsset，Windows 上靠 Unity 合并编译间接可见，Mac 分组不同时报未声明。
+6. McpBPHudFlow.cpp、McpBPAddRespawn.cpp 补充 McpBPAssetLoad.h 引用；它们调用 LoadBlueprintAsset，靠 Unity 合并编译间接可见，分组变化时报未声明。McpBPAddRespawn.cpp 在 2026-10-25 加入第 7 项修复后的 Mac 编译中暴露。
 
 稳定性修复（各平台通用）：
 
