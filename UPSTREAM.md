@@ -17,9 +17,11 @@ Mac 编译修改（新版 Apple clang 下才暴露，不影响 Windows）：
 
 稳定性修复（各平台通用）：
 
-7. FMcpNativeTransport 关闭时的竞态：Shutdown 先 Stop() 关闭监听 socket，接受线程醒来后销毁该 socket；随后 Thread->Kill(true) 再次调用 Stop()，可能对已释放的 FSocket 调 Close()，编辑器退出时 SIGABRT（Mac 实际崩溃栈：UEngineWireSubsystem::Deinitialize → FMcpNativeTransport::Shutdown → FRunnableThreadPThread::Kill → abort）。现以 ListenSocketMutex 保护 Stop() 的关闭与接受线程的销毁，Shutdown 改用 WaitForCompletion()。2026-10-25 Mac 重新编译安装后已实测编辑器加载与只读 MCP；该崩溃为偶发，退出稳定性仍在观察。Windows 发布包尚未包含此修复。
+7. FMcpNativeTransport 关闭时的竞态：Shutdown 先 Stop() 关闭监听 socket，接受线程醒来后销毁该 socket；随后 Thread->Kill(true) 再次调用 Stop()，可能对已释放的 FSocket 调 Close()，编辑器退出时 SIGABRT（Mac 实际崩溃栈：UEngineWireSubsystem::Deinitialize → FMcpNativeTransport::Shutdown → FRunnableThreadPThread::Kill → abort）。现以 ListenSocketMutex 保护 Stop() 的关闭与接受线程的销毁，Shutdown 改用 WaitForCompletion()。2026-10-25 Mac 重新编译安装后已实测编辑器加载与只读 MCP；该崩溃为偶发，退出稳定性仍在观察。Windows 发布包自 v0.6.0-beta-f-ue54.3（2026-10-26）起包含此修复。
 
 2026-10-23 Windows 构建环境：UE 5.4.4，MSVC 14.38.33145，SDK 10.0.18362.0。引擎与插件 BuildId 33043543。RunUAT 因本机无关 LightForge 插件规则扫描异常未完整通过；使用其生成的隔离 HostProject 直接 UBT 编译，参数 -DisablePlugin=LightForge，仅排除该插件而不修改其文件。UBT 退出 0，EngineWire、EngineWireFab DLL 链接成功，再整理发布包。
+
+2026-10-26 Windows 从 tag v0.6.0-beta-f-ue54.3（c296a26，含第 6、7 项与作用域令牌 helper）重新编译：UE 5.4.4，MSVC 14.38.33145，SDK 10.0.18362.0，BuildId 33043543。RunUAT 仍因同一规则扫描异常退出 6，照上法用 HostProject 直接 UBT 并 -DisablePlugin=LightForge，UBT 退出 0，两个 DLL 均已生成。安装到 Engine/Plugins/Marketplace 后已实测：编辑器加载的是新 DLL，配置作用域令牌后日志不再出现 deprecated all-or-nothing capability token 警告，Native MCP 握手与 control_actor.list summary 只读查询正常。Windows 上的退出稳定性尚未专门观察，写入操作未重新验证。
 
 已实测编辑器加载、Native MCP 与 Codex 连接、随机巡逻蓝图、蓝色门材质、蓝白 Niagara 拖尾。验证仅代表这些操作，不能代表上游所有能力。
 
