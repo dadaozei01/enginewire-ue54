@@ -4,7 +4,7 @@
 
 ## 安装
 
-从 [Releases](https://github.com/dadaozei01/enginewire-ue54/releases) 下载 Windows ZIP 与 SHA256SUMS.txt。关闭 UE，将 ZIP 内 EngineWire 文件夹放到以下一个位置：
+从 [Releases](https://github.com/dadaozei01/enginewire-ue54/releases) 下载 Windows ZIP 与 SHA256SUMS-Win64.txt。关闭 UE，将 ZIP 内 EngineWire 文件夹放到以下一个位置：
 
 - 工程级：<工程>/Plugins/EngineWire
 - 公共插件：<UE_5.4>/Engine/Plugins/Marketplace/EngineWire
@@ -23,7 +23,7 @@
 
 | 平台 | 状态 |
 |---|---|
-| Windows x64 / UE 5.4.4 | 已编译、加载，MCP 与蓝图/材质/Niagara 操作实测通过；当前 Releases 包（2026-10-23）不含退出崩溃修复，需按编译方法重新编译 |
+| Windows x64 / UE 5.4.4 | 已编译、加载，MCP 与蓝图/材质/Niagara 操作实测通过（2026-10-23 包）；v0.6.0-beta-f-ue54.3 包（2026-10-26）含退出崩溃修复，重新编译后编辑器加载、作用域令牌连接、只读查询实测通过，退出稳定性与写入尚未在该版本上重新验证；2026-10-23 的旧包不含此修复 |
 | Mac (Apple Silicon) / UE 5.4.4 | 已用 Xcode 27.0 编译为 Universal（arm64 + x86_64）；2026-10-25 含退出崩溃修复重新编译，编辑器加载、作用域令牌连接、只读查询实测通过，此后多次退出未再崩溃；写入已实测蓝图创建与复制、组件、批量写图表、删节点与函数、生成 Actor、编辑器内 Python、PIE 与截图，其他写入首次使用后需检查结果 |
 
 2026-10-25 起：修复编辑器退出时 Native MCP 关闭竞态导致的偶发崩溃（见 [UPSTREAM.md](UPSTREAM.md) 第 7 条）；请求头 helper 优先使用作用域令牌，配置见 [Claude Code 配置](docs/claude-code.md) 的「作用域令牌」。
