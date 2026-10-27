@@ -32,6 +32,9 @@
 - 不自动保存所有脏关卡；切关卡与 PIE 前检查状态，只停止自己启动的测试。
 - 动画生成新资产，不改 Skeleton 参考姿势；以用户场景相机验证脸、轮廓与肢体，而不只看资源预览。
 - 记录参数读回、编译、保存、运行、视觉效果分别是否通过。工具返回成功不等于最终效果通过。
+- 长任务返回 Still running 与 task.taskId 时，用 manage_tools 的 get_task_result 读结果，不重发原调用；预计较慢时可在 options.timeoutMs 放宽等待。
+- 资产改名：单个用 asset.rename；多个各自不同的新名字用 manage_asset maintain_content（maintenance=bulk_rename）的 renames 列表一次完成，改完 list 读回。改名会留下重定向器，需要清理时用 maintenance=fixup_redirectors。
+- 重命名当前打开的关卡后，编辑器会切到 /Temp/Untitled_N 临时世界（Windows 实测），需提醒用户重新打开改名后的关卡。
 
 ## 故障定位
 
