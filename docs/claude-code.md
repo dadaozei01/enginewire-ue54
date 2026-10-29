@@ -10,14 +10,13 @@ Claude Code（命令行与桌面版 Code 标签共用同一份配置）可直接
 
 ## 添加
 
-下面的绝对路径换成实际路径。工程参数可以是 .uproject 或工程目录，路径含中文或空格时保留引号。
+推荐不写工程路径，helper 自动连接当前打开的工程：先找监听 MCP 端口（默认 3000）的进程，确认是 UnrealEditor，再从它的启动命令行取 .uproject，读取该工程的令牌。打开哪个工程就连哪个，换工程不用改配置。下面的 helper 路径换成实际路径。
 
 Windows PowerShell：
 
 ```powershell
 $helper = 'D:/tools/enginewire-ue54/scripts/mcp-headers.cjs'
-$proj = 'D:/UE/MyProject/MyProject.uproject'
-$cfg = [ordered]@{ type = 'http'; url = 'http://127.0.0.1:3000/mcp'; headersHelper = "node `"$helper`" `"$proj`"" } | ConvertTo-Json -Compress
+$cfg = [ordered]@{ type = 'http'; url = 'http://127.0.0.1:3000/mcp'; headersHelper = "node `"$helper`"" } | ConvertTo-Json -Compress
 claude mcp add-json unreal $cfg --scope user
 ```
 
@@ -26,22 +25,35 @@ PowerShell 手写 JSON 引号容易出错，用 ConvertTo-Json 生成更稳妥�
 Mac 终端：
 
 ```sh
-claude mcp add-json unreal '{"type":"http","url":"http://127.0.0.1:3000/mcp","headersHelper":"node \"$HOME/tools/enginewire-ue54/scripts/mcp-headers.cjs\" \"$HOME/UE/MyProject/MyProject.uproject\""}' --scope user
+claude mcp add-json unreal '{"type":"http","url":"http://127.0.0.1:3000/mcp","headersHelper":"node \"/Users/you/tools/enginewire-ue54/scripts/mcp-headers.cjs\""}' --scope user
 ```
 
-单引号内 $HOME 不会展开，请改成实际绝对路径。若 Claude Code 找不到 node，把 node 换成 which node 输出的绝对路径。
-
-没有 Node 时用同目录的 scripts/mcp-headers.py，macOS 自带的 /usr/bin/python3 即可：
+若 Claude Code 找不到 node，把 node 换成 which node 输出的绝对路径。没有 Node 时用同目录的 scripts/mcp-headers.py，macOS 自带的 /usr/bin/python3 即可：
 
 ```sh
-claude mcp add-json unreal '{"type":"http","url":"http://127.0.0.1:3000/mcp","headersHelper":"/usr/bin/python3 \"/Users/you/tools/enginewire-ue54/scripts/mcp-headers.py\" \"/Users/you/UE/MyProject/MyProject.uproject\""}' --scope user
+claude mcp add-json unreal '{"type":"http","url":"http://127.0.0.1:3000/mcp","headersHelper":"/usr/bin/python3 \"/Users/you/tools/enginewire-ue54/scripts/mcp-headers.py\""}' --scope user
 ```
+
+### 固定工程
+
+要固定连某一个工程，在 helper 后加 .uproject 或工程目录作为参数（路径含中文或空格时保留引号），或设置 UE_PROJECT_PATH 环境变量。此时打开别的工程会因令牌不符返回 401。
+
+```powershell
+$cfg = [ordered]@{ type = 'http'; url = 'http://127.0.0.1:3000/mcp'; headersHelper = "node `"$helper`" `"D:/UE/MyProject/MyProject.uproject`"" } | ConvertTo-Json -Compress
+```
+
+### 自动识别的限制
+
+- 编辑器命令行里必须带 .uproject。从 Epic 启动器、双击 .uproject 或命令行打开工程都会带；只开项目浏览器、尚未选工程时不行。
+- 同时开多个编辑器时，只有先占到 3000 端口的那个能连上，helper 也只认它。
+- Claude Code 在会话开始或 /mcp 重连时调用 helper。换工程后要新开会话或执行 /mcp 重连，才会读到新工程的令牌。
+- Windows 自动识别已实测（含中文路径）；Mac 用 lsof 与 ps 查找，尚未在 Mac 上实测。
 
 ## 作用域
 
-- --scope user：所有目录可用，适合长期只连一个工程。
-- --scope project：写入当前目录的 .mcp.json，适合每个 UE 工程各自配置。该文件含本机绝对路径，不要提交到公共仓库。
-- 切换 UE 工程时令牌不同，需要改 headersHelper 中的工程路径；先 claude mcp remove unreal -s user 再重新添加。
+- --scope user：所有目录可用；配合自动识别，切换 UE 工程不用改配置。
+- --scope project：写入当前目录的 .mcp.json，适合每个 UE 工程各自固定配置。该文件含本机绝对路径，不要提交到公共仓库。
+- 已用固定工程配置的，换工程时需要改 headersHelper 中的工程路径（先 claude mcp remove unreal -s user 再重新添加），或改成上面的自动识别写法。
 
 ## 作用域令牌
 
@@ -76,4 +88,4 @@ claude mcp get unreal
 
 ## 故障定位
 
-Failed to connect：确认 UE 已启动且 3000 端口在监听，先启动 UE 再连接。401：工程路径指向了别的工程，或令牌已重新生成。helper 报 Cannot read MCP capability token：工程路径错误或 Native MCP 未启动。工具调用方式见 agent-guide.md。
+Failed to connect：确认 UE 已启动且 3000 端口在监听，先启动 UE 再连接。401：工程路径指向了别的工程，或令牌已重新生成；自动识别时多为换了工程但没重连 MCP。helper 报 Cannot read MCP capability token 时，冒号后面是原因：Nothing is listening on port 表示 UE 或 Native MCP 未启动；Port owner is not UnrealEditor 表示端口被别的程序占用；Editor command line has no .uproject 表示编辑器未带工程参数启动，改用固定工程写法；找不到令牌文件表示工程路径错误或 Native MCP 未启动过。工具调用方式见 agent-guide.md。
