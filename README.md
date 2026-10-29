@@ -28,6 +28,8 @@
 
 2026-10-25 起：修复编辑器退出时 Native MCP 关闭竞态导致的偶发崩溃（见 [UPSTREAM.md](UPSTREAM.md) 第 7 条）；请求头 helper 优先使用作用域令牌，配置见 [Claude Code 配置](docs/claude-code.md) 的「作用域令牌」。
 
+2026-10-29 起：请求头 helper 不带工程参数时，自动读取监听 MCP 端口的 UnrealEditor 当前打开工程的令牌，打开哪个工程就连哪个，换工程不用改配置（Windows 已实测，Mac 尚未实测）。写法与限制见 [Claude Code 配置](docs/claude-code.md) 的「添加」。
+
 实际 Windows 构建使用 5.4.4，描述符兼容标记为 5.4.0；定制引擎或其他版本应重新编译。
 
 - [其他 Agent 如何连接并操作](docs/agent-guide.md)
