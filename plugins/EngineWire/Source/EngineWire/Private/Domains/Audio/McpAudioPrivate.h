@@ -72,6 +72,13 @@ TArray<TWeakObjectPtr<UAudioComponent>>& McpPreviewSounds();
 USoundBase* ResolveSoundAsset(const FString& SoundPath);
 USoundMix* ResolveSoundMix(const FString& MixPath);
 USoundClass* ResolveSoundClass(const FString& ClassPath);
+// The world whose sound is heard: a running game's while one plays (its audio device is the active one and the
+// editor world's is muted), else the editor's.
+inline UWorld* McpAudibleWorld()
+{
+    UWorld* PlayWorld = GEditor ? GEditor->PlayWorld.Get() : nullptr;
+    return PlayWorld ? PlayWorld : GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+}
 
 using FAudioActionHandler = bool (*)(
     UEngineWireSubsystem* Self,
@@ -89,4 +96,6 @@ bool HandleMixActions(UEngineWireSubsystem* Self, const FString& RequestId, cons
 bool HandleComponentActions(UEngineWireSubsystem* Self, const FString& RequestId, const FString& Lower, const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FMcpBridgeWebSocket> RequestingSocket);
 bool HandleSpatialActions(UEngineWireSubsystem* Self, const FString& RequestId, const FString& Lower, const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FMcpBridgeWebSocket> RequestingSocket);
 bool HandleFadeAndReverbActions(UEngineWireSubsystem* Self, const FString& RequestId, const FString& Lower, const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FMcpBridgeWebSocket> RequestingSocket);
+// analyze_acoustics: a room's size and reverberation time from rays cast where a listener stands (McpAcoustics).
+bool HandleAcousticsActions(UEngineWireSubsystem* Self, const FString& RequestId, const FString& Lower, const TSharedPtr<FJsonObject>& Payload, TSharedPtr<FMcpBridgeWebSocket> RequestingSocket);
 }

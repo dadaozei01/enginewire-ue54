@@ -6,7 +6,69 @@ All notable changes to the EngineWire plugin (formerly McpAutomationBridge) will
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed (graph as code, UE 5.4 fork)
+- Localised editors: common menu categories (变量, 工具|流程控制, 类, 游戏) are read and matched by their English source text, so a graph read in a Chinese editor writes back.
+- A Math Expression id holding parentheses parses as one symbol; a member is matched by its owning class, so a Blueprint's GetSlot is not taken for a widget's.
+- Operator functions the menu leaves out (vector * float) are made as plain function calls instead of promotable operators, which picked vector * vector once A was wired and kept that name after B took a float.
+- Inputs are fetched again after each argument is wired, since Spawn Actor rebuilds its pins (an OwningNode assertion closed the editor).
+- A pure output read twice is bound once; binds are ordered through the pure nodes printed inline in them, so a later bind no longer spells an earlier value out again; a non-first output is bound by position, (bind (_loc _vel) ...).
+- (for i (range (+ e 1))) wires e to LastIndex instead of adding +1 and -1 nodes.
+
+## [0.6.0] - 2026-10-27
+
+Plugin-side changes since the `v0.6.0-beta-f` tag, from the code diff. The server-side view is in the root `CHANGELOG.md`.
+
+### Added
+- **Blueprint runtime errors** name their node and an Accessed None its cause; `lint_blueprint` finds such mistakes before Play, and its rules run in Data Validation too (Validate Assets, saves, commandlets: module `EngineWireValidation`); **logpoints** record a node's pin values each time it runs in Play, without pausing; **`read_graph_as_code`** reads graphs as the text of Epic's 5.8 Blueprint DSL and **`write_graph_from_code`** writes it back as nodes, keeping the nodes its ids name, on every 5.x; `create_node` `menuId`, `arrange_nodes` `layout: 'layered'`.
+- **`get_editor_focus`**: open editors, the focused graph's selected nodes, selected actors, recent errors.
+- **`describe_view`** `points` (`tolerance`), `labels`, `coveredBy`, `compareWith` (what changed since `saveAs`); **`analyze_view`** (saliency, palette, light, shader cost); **`contact_sheet`** (an actor from every side); **`audit_materials`**: the view's materials as the G-buffer holds them against physically based ranges (unlit and translucent ones skipped), texel density per material slot against the view's median as the texture streamer reckons it, and repeated static meshes worth instancing; **`audit_widget`**: a Widget Blueprint laid out at several screen sizes and checked for text cut off, overlaps, widgets off the screen or the safe area, small touch targets, low WCAG contrast and near-miss alignment.
+- **MCP 2026-07-28 on `/mcp`**: sessionless requests, header checks, `resultType`, consent by elicitation, the tasks extension.
+- **Result pages** for oversized arrays (`options.pageCursor`), and a **search signature** on a confident first hit.
+- **`get_ai_info` `info: 'path'`**: whether a pawn could walk between two points on the nav mesh, and why not; **`analyze_level_layout`**: the nav mesh read as rooms, corridors and doors, with chokes, dead ends, loops, sightlines and what the start cannot reach.
+- **`get_frame_cost`**, **`diff_asset`**, **`cancel_render`**, `configure_render_camera` shutter and overscan, `set_section` `playRate`, `configure_path_tracing` `Denoiser` and `DenoiserName` (a name no loaded denoiser plugin registers is refused, since the renderer would quietly use another; the reply lists the loaded ones); **`frame_shot`**: a camera placed so one or two actors sit on their screen points (the thirds by default), clear of what stands around them, its lens and focus set, in one undo step; **`fly_through`**: a camera flown through points round or over what stands between them, smoothed by minimum snap and keyed into a Level Sequence with a camera cut, in one undo step; **`auto_edit`**: a sequence's camera cut track rewritten from its cameras, each segment scored by how they show the subjects as the sequence plays them, cuts by jumps and crossings of the line, shot lengths bounded, by dynamic programming.
+- **`thumbnail_sheet`**, **`caption_assets`** and **`find_assets_like`**: assets ranked by words, captions, the look and size of an example, or a colour, from an index of the thumbnails stored in packages (no asset is loaded); captions are kept under Saved/, never in the assets.
+- **`measure_loudness`** and **`normalize_loudness`**: EBU R128 integrated loudness of Sound Waves from their own samples, and their Volumes set so they play at one target, in one undo step; **`analyze_acoustics`**: a room's size and RT60 from 256 rays cast where a listener stands (a traced decay read off its Schroeder curve, Eyring's formula beside it only for a closed room in proportion), with the calls that make and place a matching reverb.
+- **`plan_road`**: A* over cells and the 16 headings they are entered by, every edge under the grade along its length and clear of anything standing in its cells, every corner at the turn radius or wider (the cell sized so a turn is possible), then straightened where all of that still holds and the road stays within 25 cm of the ground, the grid turned so the road starts and ends exactly at the two points, and each point lifted where the ground crests between it and a neighbour so the middle of the laid road never dips in; ready calls for `create_road_spline` and `configure_landscape_splines` (which shapes the terrain to the road).
+- **`assemble_modules`**: wave function collapse over a grid of cells, each kit piece's faces read from its source mesh by rays (16 x 16 squares, matched by overlap) at every quarter turn, with backtracking and fresh seeds; spawned as one actor of instanced meshes, one undo step.
+- **`erode_landscape`**: Priority-Flood fill, implicit stream-power valleys and droplet gullies on a landscape's edit layer in one undo step, every cell left draining (checked on the written heights), rivers in world space; deterministic for a seed.
+- **`create_primitive` `roof`**: a hip roof mesh over any simple footprint from its straight skeleton (wavefront events found by brute force each step, ties broken by a nudge and welded), with eaves, a closing base and UVs along each eave, watertight; `append_polygons` and the roof share one append path.
+- **`auto_blend_space`**: a Blend Space's samples placed from each clip's own motion (its root's travel, or the planted feet of an in-place clip) on speed, direction or signed speeds, the axes set to hold them, in one undo step.
+- **`nanite_rebuild_mesh` `assetPaths`**, `get_niagara_info` values, `edit_dynamic_mesh` `append_cuboids`, `append_loft`, `append_mesh` and `delete_triangles`.
+- **Change watch**: what a request spawns or modifies is checked into `warnings`, with Map Check and Data Validation on what it touched.
+- **Undo ledger**: `undo` blocks come from the transaction buffer; **restore points** undo only this server's steps and name the delete of what they created.
+- **`explain`** fault trees (collision, visible, input, widget, audible, lit), each failure naming the call that fixes it.
+- **Loop guard** on `/mcp`: a call failing three times unchanged is refused (`REPEATED_FAILURE`).
+- **`dryRun`** on `build_graph`, `build_material_graph` and `add_widget_tree`, which check every step first; **`run_script`** runs capability calls with loops and conditions in one request, each step checked as a direct execute is, rolled back on a failure; **recipes** (`save_recipe`, `run_recipe`, `list_recipes`) keep such a script in the project with parameters, and search lists the ones a request names.
+- **`run_map_check`**, **`fix_placement`**, **`describe_relations`**, **`arrange_by_relations`**, **`arrange_widgets`** (a Canvas Panel's children placed by relations, solved by Cassowary, anchored to hold at every screen size), **`playtest`** (a pawn walked to a goal in Play, judged with evidence), **`settle_physics`** (props dropped and kept where they come to rest), **`explore_level`** (a pawn explores the level: falls, traps, unreachable areas), and execute's `options.expect` (after the call) and `options.require` (before it).
+- **Change journal**: `changes_since` and `ue://changes` subscriptions list what changed since a cursor and who changed it.
+- **Domain playbooks as MCP prompts**: nine (`blueprint-logic`, `input-setup`, `widget-ui`, `niagara-vfx`, `material-authoring`, `world-building`, `animation-setup`, `cinematics`, `play-testing`), each the capabilities to reach for in order and the traps of its domain; a unit test holds every prompt step to a capability the catalog has.
+- **`remove_sublevel`**: the Levels panel's Remove, without the undo reset that turns a reference still held to the removed world into a Fatal; locked, unsaved (`discardUnsaved`) and Level Instance levels are refused before the engine would open a dialog.
+
+### Changed
+- **Enable Native MCP Server is on by default**: `/mcp` is the only gateway, and the npm package is a stdio proxy in front of it.
+- **Consent nonces are minted and required on `/mcp`**: describe and the consent ask mint each grant's nonce for its capability in the ledger, and a missing, made-up or other capability's nonce is `CONSENT_NOT_ISSUED` (the WebSocket bridge, which has no describe, keeps the old rule).
+
+### Fixed
+- **Builds and links on UE 5.0-5.8, Windows and Mac**: each file compiles on its own; 5.1's data layer creation parameters are made by reflection; Smart Objects are reached by reflection, with no Mass module; before 5.5 State Trees compile through the editor module (validated and marked up to date, as from 5.5), with no StructUtils link; older Apple clang and UE 5.8's unreachable-code rule pass.
+- **Smart Object slots**: a field the engine lacks (activity tags before 5.1, the enabled flag before 5.2) is refused instead of ignored, and `add_smart_object_component` checks that its definition took.
+- **Small fixes**: `runtime_report` filters, diagnostics files, task principals, the RHI thread in `busiestThreadMs`, material instances as instance parents, `list_tracks` (its rows' `muted` was undeclared, so every reply failed), `process_asset` thumbnail `outputPath` (from 5.1 it held JPEG data under the .png name), `set_bone_key` on a sequence's last frame (a clip of N frames has keys 0 to N; N was refused), `create_primitive`'s text says its meshes have no collision until `configure_mesh_collision`, `configure_landscape_splines` shapes the terrain where its points are (with edit layers its splines changed no heights, and its points went into the landscape's scaled space; they now go through a Splines edit layer, added when missing, in one undo step), a primitive (`create_primitive`, `create_procedural_mesh`) is spawned as one undo step (undo skipped the new actor), `validate_assets` `dataValidation` with the Data Validation plugin off is refused (`DATAVALIDATION_PLUGIN_NOT_ENABLED`; it failed the module's delay-load).
+- **Removals** name what still uses an asset (`*_IN_USE`, `referencedBy`), keep outside-referenced assets (and what only a kept asset uses), take exact components and undo for tracks and keys; extra sky lights are named, not destroyed.
+- **Fold variants** enforce their own requirements before dispatch, and describe lists what each one does under the selector.
+- **Renders** honour `renderTimeoutMs`; save_all and restart_editor wait (`RENDER_IN_PROGRESS`).
+- **Dialogs**: an open editor dialog answers requests `EDITOR_MODAL_ACTIVE` with its title instead of a wait and `EDITOR_BLOCKED`.
+- **Viewport captures** settle across ticks and warn on demoted video memory; grid edits keep the fields left out and answer with the grid's values.
+- **Properties**: deprecated ones are refused; Niagara systems re-init after a write; settings take object references; component writes run the component's own change handling; reads write out 0 and false.
+- **Placement and tracks**: physics-body ground traces, player-start capsules, spline meshes judged section by section on current bounds (never as their mesh box), no overlaps with a landscape's box, whole track names (`AMBIGUOUS_TRACK`), partial `set_bone_key`, key times across display rates.
+- **Niagara and animation**: creates refuse taken names and unknown types; curve keys and axes read back; PIE pause and resume say when nothing changed.
+- **Pre-queue scans** walk 262144 values; rate-limit replies carry `retryAfterSeconds`.
+- **Undo** for property, actor, component, lighting, foliage, landscape, sequence, data table, bone and material-node edits, also on assets created without `RF_Transactional`.
+- **Git**: commit messages go to git through a file and identities refuse quotes (a quote injected git options); checkout and submit list skipped paths; `enable` switches providers.
+- **Finds** stop at `limit` with `truncated` and `totalCount`; **`cleanup`** is destructive, one transaction, refused in Play.
+- **Refused instead of overwritten or guessed**: taken names and paths, bakes over another kind, engine content, unknown types, empty edits, incompatible pins, non-Character edits.
+- **Calls that now do what they say**: fades, thumbnails, sockets, ragdolls, AI, PCG, widgets, landscape, foliage, water, Play audio and streaming, `run_benchmark`, splines, volumes, view modes and more.
+- **Saves are reported** (`saved`, `SAVE_FAILED`, `COMPILE_FAILED` with the compiler error) by creators and asset edits; a `save: false` edit stays unsaved.
+- **`/mcp` discovery**: search rows, filters and cursors, `describe` by domain and family, name and param guidance.
+- **A disabled tool's `nextCall` turns it back on** (`configure` `enable_tools`) in search rows, describe and `TOOL_DISABLED`.
 
 ## [0.6.0-beta-f] - 2026-10-16
 
@@ -14,27 +76,35 @@ Plugin-side changes since the `v0.6.0-beta-e` tag, from the code diff. The serve
 
 ### Changed
 - **Renamed EngineWire** (was McpAutomationBridge): plugin, modules, classes and settings page, with short source file names for Fab; settings under the old section still load.
-- **`build_graph` rolls back a failed batch**, and replies are leaner: actors named once, compact runtime and spawn-batch reports, transforms rounded to ten digits.
-- **The native gateway** resolves capability namespaces and ignores filler words in search; dead parameter aliases are gone.
+- **`build_graph` rolls back a failed batch** and runs each step in the graph of the node it names; replies are leaner: actors named once, compact runtime and spawn-batch reports, `get_component_details` values only on request, transforms rounded to ten digits.
+- **The native gateway** resolves capability namespaces and ignores filler words in search.
 
 ### Added
 - **Gameplay**: `add_behaviour` and its recipes, `apply_damage`, `implement_interface`, `edit_timeline`, Bind Event nodes, collision presets and responses, `create_physical_material`.
-- **Blueprint tools**: `find_functions`, graph checks for pure nodes that run twice, `compile` `folder`, graph `filter` by wired variable, `unusedOnly`, `remove_variable` `variableNames`.
+- **Blueprint tools**: `find_functions`, graph checks (values read twice, timers, waits in loops, values changed in place, endless play-and-forget sounds), `compile` `folder`, graph `filter` by wired variable, `unusedOnly`, `remove_variable` `variableNames`.
 - **Packaging** (UE 5.0-5.8 checked): `package_project` `executableName` builds a game target of that name, `launch_build` `map`, and `enable_plugin` `targets` with a warning for folders the cook always takes.
-- **Actors**: spawn batch `repeat` and `properties`, coplanar-face reports, `set_transform` and component edits on many actors, `set_folder`, `describe_view` `actors`.
-- **Motion and animation**: `sample_motion` `spawnOf`, pass-through and overlap tracking, `analyze_animation`, skeletal mesh import options, animation graph nodes by class.
+- **Actors**: spawn batch `repeat` and `properties`, spawn `folder` and `tags`, coplanar-face reports, `set_transform` and component edits on many actors, `set_folder`, `describe_view` `actors`, child Blueprint overrides.
+- **Motion and animation**: `sample_motion` `spawnOf`, pass-through and overlap tracking, game log lines in motion reads and frame steps, `analyze_animation`, skeletal mesh import options, animation graph nodes by class.
 - **Effects and audio**: several parameters on a placed effect, emitter copy between systems, a narrowed `get_niagara_info`, `list_metasound_nodes`, box attenuation `extent`.
-- **Project**: `configure_rendering`, `create_cpp_class`, `validate_assets` `materialUsage`, `mesh_materials` `assetPaths`, `get_widget_animation`, game screenshot FOV, SDF `relativeTo`.
+- **Project**: `configure_rendering`, `create_cpp_class`, `validate_assets` `materialUsage`, `mesh_materials` `assetPaths`, `get_widget_animation`, game screenshot FOV, SDF `relativeTo`, `edit_dynamic_mesh` `meshPath`, `play` `unpauseGame`.
+
+### Removed
+- **Dead level-call aliases** that every call was refused for: `open_level` `path` and `assetPath`, `focus_actor` `name`, `manage_level` `delete` `path` and `levelPaths`, `duplicate_level` `targetPath`, `set_metadata` and `validate_level` `assetPath`.
 
 ### Fixed
-- **Honest replies**: compiler lines dropped after a clean compile, widget rename name checks, log-less Shipping runs named, compiler warnings in receipts, self-destroying spawns, game pause and minimized-editor warnings.
-- **Blueprint graphs**: enum pins and nodes, container pin types, call nodes by shown title (`K2_` names), auto-placed nodes, refused nodes leave no undo step, schema checks, Math Expression parsing and rebinding in duplicates.
-- **Properties**: Map, Set, array, float and struct values; actor references by label; spawn variables set before BeginPlay.
-- **Gameplay**: combat projectiles and weapons, interactables, `apply_force` impulses, physics on placed props, the game cursor in Play In Editor.
+- **Honest replies**: compiler lines dropped after a clean compile, widget rename name checks, log-less Shipping runs named, compiler warnings in receipts, self-destroying spawns and destroyed actors, game pause, paused-world and minimized-editor warnings, the focused game widget, conversion-node links, typed and project paths kept in replies.
+- **Blueprint graphs**: enum pins and nodes, container pin types, pin literals only on unwired inputs, call nodes by shown title (`K2_` names), auto-placed nodes, refused nodes leave no undo step, schema checks, parent components edited from a child, Math Expression parsing and rebinding in duplicates.
+- **Properties**: Map, Set, array, float and struct values; actor references by label; StaticMesh set through its setter; spawn variables set before BeginPlay; project settings resolve class names.
+- **Gameplay**: combat projectiles (damage, lifespan) and weapons, interactables and triggers, `apply_force` impulses, physics on placed props, the game cursor in Play In Editor.
+- **Input and motion**: held keys count game time across stepped frames, `actionMappings` in mapping replies, scripted movers' velocity, `levelChanged`.
 - **Placement**: convex and complex collision tests, the enclosure ground probe, inherited uneven scale, the physics scene flushed in spawn batches.
-- **Niagara**: modules inserted in dependency order, duplicated systems compiled before saving, typed placed-effect parameters, engine input names in bindings.
-- **Assets and geometry**: delete counts and quiet routine logs, import results, Fab format choice, polygon winding, linear arrays, SDF grid bounds, material orphans and usage flags.
-- **Editor**: `stop` waits for play to end, `levelChanged`, video memory reports, threaded log capture, volume and component undo.
+- **Niagara**: edits act only on the emitter the caller named (#658) and create actions write only a valid package (#668), both by @SoloGorilla; modules inserted in dependency order and named as their inputs are; duplicated systems compiled before saving; typed placed-effect parameters; engine input names in bindings.
+- **Assets and geometry**: delete counts and quiet routine logs, name-filtered folder lists, import results, Fab format choice, polygon winding, linear arrays, SDF grid bounds, material orphans and usage flags.
+- **Editor**: level loads answered once settled, `stop` waits for play to end, video memory reports, threaded log capture, volume and component undo, negative zero written as `0` in native replies (#662).
+- **Builds**: the `.uplugin` declares Win64, Mac and Linux so Android builds skip the plugin (#666); missing includes for Fab's UE 5.0-5.4 toolchains.
+
+### Migration
+- Replace `Plugins/McpAutomationBridge` with `Plugins/EngineWire`; settings under `[/Script/McpAutomationBridge.McpAutomationBridgeSettings]` still load while `[/Script/EngineWire.EngineWireSettings]` is empty.
 
 ## [0.6.0-beta-e] - 2026-10-09
 

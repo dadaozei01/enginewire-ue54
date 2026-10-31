@@ -1,0 +1,1175 @@
+[
+  {
+    "id": "animation_physics.create_geometry_collection",
+    "aliases": [
+      "animation_physics.make_destructible",
+      "animation_physics.new_geometry_collection"
+    ],
+    "discovery": {
+      "domain": "animation physics",
+      "family": "destruction",
+      "topics": [
+        "create_geometry_collection",
+        "geometry collection",
+        "chaos destruction",
+        "fracture mode new",
+        "make a mesh destructible",
+        "destructible mesh",
+        "breakable object",
+        "几何体集合",
+        "破碎",
+        "可破坏"
+      ],
+      "summary": "Fracture Mode's New: make a new Chaos Geometry Collection asset from one or more static meshes (staticMeshPaths), one rigid piece per mesh under a single root, with the project's Fracture Mode convex and proximity defaults. name defaults to GC_<first mesh> and path to the first mesh's folder; an asset already there is refused, never rebuilt. spawnActor places an actor that draws it (location, rotation, actorLabel, simulatePhysics). The reply gives geometryCollectionPath, pieceCount, triangleCount, bounds and saved. Cut it next with fracture_geometry_collection.",
+      "whenToUse": [
+        "A static mesh must break apart with Chaos: make its Geometry Collection here, then cut it.",
+        "A collection was cut wrongly: make a fresh one here and cut that instead of cutting the old one again."
+      ],
+      "whenNotToUse": [
+        "An existing Geometry Collection must be cut or grouped: use fracture_geometry_collection or cluster_geometry_collection.",
+        "A destructible door, crate or switch with gameplay logic is wanted: use manage_interaction."
+      ]
+    },
+    "schemas": {
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The action to execute on the parent tool."
+          },
+          "staticMeshPaths": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "items": {
+              "type": "string"
+            },
+            "description": "Static mesh asset paths, e.g. /Game/Props/SM_Vase. Each becomes one piece, all at the asset origin."
+          },
+          "name": {
+            "type": "string",
+            "description": "Asset name (default GC_<first mesh name>)."
+          },
+          "path": {
+            "type": "string",
+            "description": "Folder for the asset (default: the first mesh's folder, as Fracture Mode's New)."
+          },
+          "splitComponents": {
+            "type": "boolean",
+            "description": "Make each disconnected part of a mesh its own piece (default false)."
+          },
+          "allowLargeInput": {
+            "type": "boolean",
+            "description": "Go ahead with more than 1,000,000 source triangles (refused otherwise, as New asks first)."
+          },
+          "spawnActor": {
+            "type": "boolean",
+            "description": "Also place a Geometry Collection actor in the level that draws the asset (default false)."
+          },
+          "location": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "z": {
+                "type": "number"
+              }
+            },
+            "description": "World location of the spawned actor (default origin)."
+          },
+          "rotation": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "pitch": {
+                "type": "number"
+              },
+              "yaw": {
+                "type": "number"
+              },
+              "roll": {
+                "type": "number"
+              }
+            },
+            "description": "Rotation of the spawned actor in degrees."
+          },
+          "actorLabel": {
+            "type": "string",
+            "description": "Label of the spawned actor (default the asset name)."
+          },
+          "simulatePhysics": {
+            "type": "boolean",
+            "description": "Whether the spawned actor simulates (engine default true: it falls and breaks in Play). false keeps it still until something else wakes it."
+          }
+        },
+        "required": [
+          "action",
+          "staticMeshPaths"
+        ],
+        "additionalProperties": false
+      },
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the action succeeded."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable result message."
+          },
+          "details": {
+            "type": "object",
+            "x-unreal-reflection-boundary": true,
+            "description": "Additional handler result fields not named by the contract."
+          },
+          "geometryCollectionPath": {
+            "type": "string",
+            "description": "Object path of the new Geometry Collection."
+          },
+          "pieceCount": {
+            "type": "number",
+            "description": "Rigid pieces (leaf bones with geometry)."
+          },
+          "triangleCount": {
+            "type": "number",
+            "description": "Triangles in the collection."
+          },
+          "bounds": {
+            "type": "object",
+            "description": "{min, max, size} in the asset's space, cm."
+          },
+          "actorName": {
+            "type": "string",
+            "description": "Label of the spawned actor, when spawnActor was set."
+          },
+          "saved": {
+            "type": "boolean",
+            "description": "Whether the asset was saved."
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "examples": [
+      {
+        "title": "Make a Geometry Collection from one mesh and place it in the level.",
+        "input": {
+          "action": "create_geometry_collection",
+          "staticMeshPaths": [
+            "/Game/Props/SM_Vase"
+          ],
+          "name": "GC_Vase_Test",
+          "spawnActor": true,
+          "location": {
+            "x": 0,
+            "y": 0,
+            "z": 100
+          }
+        },
+        "output": {
+          "success": true,
+          "message": "Created GC_Vase_Test from 1 static mesh(es): 1 piece(s), placed in the level.",
+          "geometryCollectionPath": "/Game/Props/GC_Vase_Test.GC_Vase_Test",
+          "pieceCount": 1,
+          "actorName": "GC_Vase_Test",
+          "saved": true
+        }
+      }
+    ],
+    "availability": {
+      "requiredPlugins": [
+        "GeometryCollectionPlugin"
+      ],
+      "editorStates": [
+        "edit"
+      ]
+    },
+    "behavior": {
+      "effect": "write",
+      "idempotency": "non-idempotent",
+      "longRunning": false,
+      "safeToRetry": false
+    },
+    "policy": {
+      "requiredScope": "write",
+      "consent": "none",
+      "dataAccess": "project-write"
+    },
+    "cost": {
+      "latency": "interactive",
+      "resources": "medium"
+    },
+    "routing": {
+      "parentTool": "animation_physics",
+      "dispatchAction": "create_geometry_collection"
+    }
+  },
+  {
+    "id": "animation_physics.fracture_geometry_collection",
+    "aliases": [
+      "animation_physics.voronoi_fracture",
+      "animation_physics.uniform_voronoi"
+    ],
+    "discovery": {
+      "domain": "animation physics",
+      "family": "destruction",
+      "topics": [
+        "fracture_geometry_collection",
+        "voronoi fracture",
+        "uniform voronoi",
+        "custom voronoi",
+        "fracture a mesh",
+        "break into pieces",
+        "shatter",
+        "grout",
+        "切碎",
+        "破碎",
+        "碎块"
+      ],
+      "summary": "Fracture Mode's Uniform Voronoi (siteCount, optional siteCountMax for a random count in range) or Custom Voronoi (sites, points in the asset's space): cut a Geometry Collection (geometryCollectionPath, or actorName of an actor drawing one). randomSeed (-1 picks one, returned), chanceToFracture, groupFracture (default true), grout, noise (noiseAmplitude > 0 with noiseFrequency, noisePersistence, noiseLacunarity, noiseOctaves, noisePointSpacing) and collisionSampleSpacing as in the tool; boneIndices cuts only those bones (default the roots). A collection already cut is refused ALREADY_FRACTURED unless allowRefracture, and a cut estimated over maxPieces (default 2000) is refused TOO_MANY_PIECES, both before anything is cut. The reply gives piecesBefore, pieceCount, newPieces, levels and bounds. One undo step; saved.",
+      "whenToUse": [
+        "A Geometry Collection must be cut into pieces: about siteCount pieces from one mesh.",
+        "Pieces must follow chosen points: send sites (Custom Voronoi), e.g. bands from top to bottom of a shell."
+      ],
+      "whenNotToUse": [
+        "The collection does not exist yet: use create_geometry_collection first.",
+        "Pieces must be grouped into breakable clusters: use cluster_geometry_collection after cutting."
+      ]
+    },
+    "schemas": {
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The action to execute on the parent tool."
+          },
+          "geometryCollectionPath": {
+            "type": "string",
+            "description": "Geometry Collection asset path (wins over actorName)."
+          },
+          "actorName": {
+            "type": "string",
+            "description": "An actor in the level whose Geometry Collection component's asset is cut."
+          },
+          "siteCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000,
+            "description": "Voronoi sites, about one piece each (Uniform Voronoi's Min Voronoi Sites)."
+          },
+          "siteCountMax": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000,
+            "description": "Upper end of a random site count (Max Voronoi Sites); default siteCount."
+          },
+          "sites": {
+            "type": "array",
+            "maxItems": 5000,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "x",
+                "y",
+                "z"
+              ],
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "z": {
+                  "type": "number"
+                }
+              }
+            },
+            "description": "Custom Voronoi: the site points in the asset's space, cm. Overrides siteCount."
+          },
+          "randomSeed": {
+            "type": "integer",
+            "minimum": -1,
+            "description": "Seed for sites and chance; -1 (default) picks one, returned as randomSeed so the cut can be repeated."
+          },
+          "chanceToFracture": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Chance each selected piece is cut (default 1)."
+          },
+          "groupFracture": {
+            "type": "boolean",
+            "description": "One diagram across every selected piece (default true); false cuts each piece with its own sites, multiplying the count."
+          },
+          "grout": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Gap removed between pieces, cm (default 0)."
+          },
+          "noiseAmplitude": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Noise on the cut surfaces, cm; 0 (default) keeps them flat."
+          },
+          "noiseFrequency": {
+            "type": "number",
+            "description": "Noise frequency (default 0.1)."
+          },
+          "noisePersistence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Noise persistence (default 0.5)."
+          },
+          "noiseLacunarity": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 8,
+            "description": "Noise lacunarity (default 2)."
+          },
+          "noiseOctaves": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "description": "Noise octaves (default 4)."
+          },
+          "noisePointSpacing": {
+            "type": "number",
+            "minimum": 1,
+            "description": "Vertex spacing of noisy surfaces, cm (default 10); smaller is denser and slower."
+          },
+          "collisionSampleSpacing": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Add collision samples this far apart on new surfaces, cm; 0 (default) adds none."
+          },
+          "boneIndices": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Transform indices to cut (clusters stand for their rigid pieces); default the roots."
+          },
+          "allowRefracture": {
+            "type": "boolean",
+            "description": "Cut a collection that is already cut (refused by default: each cut multiplies the pieces)."
+          },
+          "maxPieces": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50000,
+            "description": "Refuse a cut estimated to make more pieces than this (default 2000)."
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": false,
+        "requiredOneOf": [
+          "geometryCollectionPath",
+          "actorName"
+        ]
+      },
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the action succeeded."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable result message."
+          },
+          "details": {
+            "type": "object",
+            "x-unreal-reflection-boundary": true,
+            "description": "Additional handler result fields not named by the contract."
+          },
+          "geometryCollectionPath": {
+            "type": "string",
+            "description": "Object path of the cut collection."
+          },
+          "piecesBefore": {
+            "type": "number",
+            "description": "Rigid pieces before the cut."
+          },
+          "pieceCount": {
+            "type": "number",
+            "description": "Rigid pieces after the cut."
+          },
+          "newPieces": {
+            "type": "number",
+            "description": "pieceCount minus piecesBefore."
+          },
+          "randomSeed": {
+            "type": "number",
+            "description": "The seed used."
+          },
+          "levelCount": {
+            "type": "number",
+            "description": "Levels in the hierarchy (the root is level 0)."
+          },
+          "piecesPerLevel": {
+            "type": "array",
+            "description": "Leaf pieces at each level."
+          },
+          "saved": {
+            "type": "boolean",
+            "description": "Whether the asset was saved."
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "examples": [
+      {
+        "title": "Cut a fresh Geometry Collection into about 30 pieces.",
+        "input": {
+          "action": "fracture_geometry_collection",
+          "geometryCollectionPath": "/Game/Props/GC_Vase_Test",
+          "siteCount": 30,
+          "randomSeed": 7
+        },
+        "output": {
+          "success": true,
+          "message": "Cut 1 piece(s) of GC_Vase_Test with 30 Voronoi site(s): 30 pieces now (was 1).",
+          "piecesBefore": 1,
+          "pieceCount": 30,
+          "newPieces": 29,
+          "randomSeed": 7,
+          "levelCount": 2,
+          "saved": true
+        }
+      }
+    ],
+    "availability": {
+      "requiredPlugins": [
+        "Fracture",
+        "PlanarCut"
+      ],
+      "editorStates": [
+        "edit"
+      ]
+    },
+    "behavior": {
+      "effect": "write",
+      "idempotency": "non-idempotent",
+      "longRunning": false,
+      "safeToRetry": false
+    },
+    "policy": {
+      "requiredScope": "write",
+      "consent": "none",
+      "dataAccess": "project-write"
+    },
+    "cost": {
+      "latency": "interactive",
+      "resources": "high"
+    },
+    "routing": {
+      "parentTool": "animation_physics",
+      "dispatchAction": "fracture_geometry_collection"
+    }
+  },
+  {
+    "id": "animation_physics.cluster_geometry_collection",
+    "aliases": [
+      "animation_physics.auto_cluster"
+    ],
+    "discovery": {
+      "domain": "animation physics",
+      "family": "destruction",
+      "topics": [
+        "cluster_geometry_collection",
+        "auto cluster",
+        "cluster pieces",
+        "fracture clusters",
+        "group fractured pieces",
+        "自动分组",
+        "聚类"
+      ],
+      "summary": "Fracture Mode's Auto Cluster: group the pieces under each chosen cluster (clusterBones, default the roots) of a cut Geometry Collection into new clusters one level down. clusterSizeMethod by_number (siteCount, default 10), by_fraction (siteCountFraction), by_size (siteSize) or by_grid (gridX, gridY, gridZ, driftIterations), with enforceConnectivity, avoidIsolated, enforceSiteParameters, minimumClusterSize, preferConvexity and concavityTolerance as in the tool. A collection with no cluster of two or more pieces is refused NOT_FRACTURED. The reply gives clusterCount and levelCount before and after, piecesPerLevel and transformsPerLevel. One undo step; saved.",
+      "whenToUse": [
+        "A cut collection must break in groups before single pieces: cluster it after fracture_geometry_collection."
+      ],
+      "whenNotToUse": [
+        "The collection is not cut yet: use fracture_geometry_collection first."
+      ]
+    },
+    "schemas": {
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The action to execute on the parent tool."
+          },
+          "geometryCollectionPath": {
+            "type": "string",
+            "description": "Geometry Collection asset path (wins over actorName)."
+          },
+          "actorName": {
+            "type": "string",
+            "description": "An actor in the level whose Geometry Collection component's asset is clustered."
+          },
+          "clusterSizeMethod": {
+            "type": "string",
+            "enum": [
+              "by_number",
+              "by_fraction",
+              "by_size",
+              "by_grid"
+            ],
+            "description": "How the cluster count is chosen (default by_number)."
+          },
+          "siteCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000,
+            "description": "by_number: clusters to make (default 10)."
+          },
+          "siteCountFraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "by_fraction: clusters as a fraction of the pieces (default 0.25)."
+          },
+          "siteSize": {
+            "type": "number",
+            "description": "by_size: cluster size relative to the pieces (default 1)."
+          },
+          "gridX": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64,
+            "description": "by_grid: cells along X (default 2)."
+          },
+          "gridY": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64,
+            "description": "by_grid: cells along Y (default 2)."
+          },
+          "gridZ": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64,
+            "description": "by_grid: cells along Z (default 2)."
+          },
+          "driftIterations": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000,
+            "description": "by_grid: K-means drift iterations (default 0)."
+          },
+          "minimumClusterSize": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Merge clusters smaller than this (default 0)."
+          },
+          "enforceConnectivity": {
+            "type": "boolean",
+            "description": "Only touching pieces share a cluster (default true)."
+          },
+          "avoidIsolated": {
+            "type": "boolean",
+            "description": "Merge single-piece clusters into a neighbour (default true)."
+          },
+          "enforceSiteParameters": {
+            "type": "boolean",
+            "description": "Keep the cluster count even when connectivity splits one (default true)."
+          },
+          "preferConvexity": {
+            "type": "boolean",
+            "description": "Favour convex clusters (not with by_grid; default false)."
+          },
+          "concavityTolerance": {
+            "type": "number",
+            "minimum": 0,
+            "description": "With preferConvexity, the concavity allowed (default 0)."
+          },
+          "clusterBones": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Transform indices of the clusters to group (a piece stands for its parent); default the roots."
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": false,
+        "requiredOneOf": [
+          "geometryCollectionPath",
+          "actorName"
+        ]
+      },
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the action succeeded."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable result message."
+          },
+          "details": {
+            "type": "object",
+            "x-unreal-reflection-boundary": true,
+            "description": "Additional handler result fields not named by the contract."
+          },
+          "geometryCollectionPath": {
+            "type": "string",
+            "description": "Object path of the collection."
+          },
+          "clusterCount": {
+            "type": "number",
+            "description": "Clusters after (the root counts)."
+          },
+          "clusterCountBefore": {
+            "type": "number",
+            "description": "Clusters before."
+          },
+          "levelCount": {
+            "type": "number",
+            "description": "Levels after."
+          },
+          "levelCountBefore": {
+            "type": "number",
+            "description": "Levels before."
+          },
+          "pieceCount": {
+            "type": "number",
+            "description": "Rigid pieces (unchanged by clustering)."
+          },
+          "saved": {
+            "type": "boolean",
+            "description": "Whether the asset was saved."
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "examples": [
+      {
+        "title": "Group a cut collection's pieces into 8 clusters.",
+        "input": {
+          "action": "cluster_geometry_collection",
+          "geometryCollectionPath": "/Game/Props/GC_Vase_Test",
+          "siteCount": 8
+        },
+        "output": {
+          "success": true,
+          "message": "Auto clustered GC_Vase_Test: 9 clusters over 3 levels (was 1 over 2).",
+          "clusterCount": 9,
+          "clusterCountBefore": 1,
+          "levelCount": 3,
+          "levelCountBefore": 2,
+          "pieceCount": 30,
+          "saved": true
+        }
+      }
+    ],
+    "availability": {
+      "requiredPlugins": [
+        "Fracture"
+      ],
+      "editorStates": [
+        "edit"
+      ]
+    },
+    "behavior": {
+      "effect": "write",
+      "idempotency": "non-idempotent",
+      "longRunning": false,
+      "safeToRetry": false
+    },
+    "policy": {
+      "requiredScope": "write",
+      "consent": "none",
+      "dataAccess": "project-write"
+    },
+    "cost": {
+      "latency": "interactive",
+      "resources": "medium"
+    },
+    "routing": {
+      "parentTool": "animation_physics",
+      "dispatchAction": "cluster_geometry_collection"
+    }
+  },
+  {
+    "id": "animation_physics.get_geometry_collection_info",
+    "aliases": [
+      "animation_physics.inspect_geometry_collection"
+    ],
+    "discovery": {
+      "domain": "animation physics",
+      "family": "destruction",
+      "topics": [
+        "get_geometry_collection_info",
+        "geometry collection pieces",
+        "how many pieces",
+        "fracture levels",
+        "damage threshold",
+        "碎块数",
+        "层级"
+      ],
+      "summary": "Read a Geometry Collection (geometryCollectionPath, or actorName of an actor drawing one): pieceCount (rigid leaf pieces), clusterCount, transformCount, levelCount with transformsPerLevel and piecesPerLevel, bounds {min, max, size} in the asset's space, triangleCount and vertexCount, and its physics settings as configure_geometry_collection names them (damageThresholds, damageModel, enableClustering, collisionType, implicitType, convexRemoveOverlaps and the other convex values, mass, physicsMaterialPath, enableNanite) plus geometrySourceCount.",
+      "whenToUse": [
+        "Check what a fracture or cluster produced, or read the settings before changing them."
+      ],
+      "whenNotToUse": [
+        "A static mesh's triangles or size are needed: use inspect inspect_object."
+      ]
+    },
+    "schemas": {
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The action to execute on the parent tool."
+          },
+          "geometryCollectionPath": {
+            "type": "string",
+            "description": "Geometry Collection asset path (wins over actorName)."
+          },
+          "actorName": {
+            "type": "string",
+            "description": "An actor in the level whose Geometry Collection component's asset is read."
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": false,
+        "requiredOneOf": [
+          "geometryCollectionPath",
+          "actorName"
+        ]
+      },
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the action succeeded."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable result message."
+          },
+          "details": {
+            "type": "object",
+            "x-unreal-reflection-boundary": true,
+            "description": "Additional handler result fields not named by the contract."
+          },
+          "geometryCollectionPath": {
+            "type": "string",
+            "description": "Object path of the collection."
+          },
+          "pieceCount": {
+            "type": "number",
+            "description": "Rigid leaf pieces with geometry."
+          },
+          "clusterCount": {
+            "type": "number",
+            "description": "Transforms with children (the root counts)."
+          },
+          "transformCount": {
+            "type": "number",
+            "description": "All transforms (bones)."
+          },
+          "levelCount": {
+            "type": "number",
+            "description": "Levels in the hierarchy (root is level 0)."
+          },
+          "transformsPerLevel": {
+            "type": "array",
+            "description": "Transforms at each level."
+          },
+          "piecesPerLevel": {
+            "type": "array",
+            "description": "Leaf pieces at each level."
+          },
+          "bounds": {
+            "type": "object",
+            "description": "{min, max, size} in the asset's space, cm."
+          },
+          "triangleCount": {
+            "type": "number",
+            "description": "Triangles."
+          },
+          "damageThresholds": {
+            "type": "array",
+            "description": "Damage threshold per cluster level."
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "examples": [
+      {
+        "title": "Read a Geometry Collection's pieces and levels.",
+        "input": {
+          "action": "get_geometry_collection_info",
+          "geometryCollectionPath": "/Game/Props/GC_Vase_Test"
+        },
+        "output": {
+          "success": true,
+          "message": "GC_Vase_Test: 30 pieces, 9 clusters, 3 levels.",
+          "pieceCount": 30,
+          "clusterCount": 9,
+          "levelCount": 3,
+          "transformsPerLevel": [
+            1,
+            8,
+            30
+          ],
+          "piecesPerLevel": [
+            0,
+            0,
+            30
+          ]
+        }
+      }
+    ],
+    "availability": {
+      "requiredPlugins": [
+        "GeometryCollectionPlugin"
+      ],
+      "editorStates": [
+        "edit",
+        "pie"
+      ]
+    },
+    "behavior": {
+      "effect": "read",
+      "idempotency": "idempotent",
+      "longRunning": false,
+      "safeToRetry": true
+    },
+    "policy": {
+      "requiredScope": "read",
+      "consent": "none",
+      "dataAccess": "project-read"
+    },
+    "cost": {
+      "latency": "instant",
+      "resources": "low"
+    },
+    "routing": {
+      "parentTool": "animation_physics",
+      "dispatchAction": "get_geometry_collection_info"
+    }
+  },
+  {
+    "id": "animation_physics.configure_geometry_collection",
+    "aliases": [
+      "animation_physics.set_geometry_collection_physics"
+    ],
+    "discovery": {
+      "domain": "animation physics",
+      "family": "destruction",
+      "topics": [
+        "configure_geometry_collection",
+        "damage threshold",
+        "convex overlap removal",
+        "geometry collection collision",
+        "implicit type",
+        "geometry collection mass",
+        "伤害阈值",
+        "碰撞类型"
+      ],
+      "summary": "Set a Geometry Collection asset's physics settings (geometryCollectionPath, or actorName of an actor drawing one) through the details panel's own rebuild path: damageThresholds (one per cluster level from the root), useSizeSpecificDamageThreshold, damageModel (user_defined, material_strength), enableClustering; the first size bucket's collision shape: collisionType (implicit_implicit, particle_implicit), implicitType (box, sphere, capsule, level_set, none, convex), collisionMarginFraction, collisionObjectReductionPercentage; convex generation: convexRemoveOverlaps (none, all, only_clusters, only_clusters_vs_clusters), convexOverlapShrinkPercent, convexFractionAllowRemove, convexSimplificationThreshold, convexCanExceedFraction; massAsDensity, mass, physicsMaterialPath (empty clears it), enableNanite. A placed actor's component keeps its own copy of the damage settings and physical material from when it was placed, so only named actors take the new values: the actorName the asset was found through, and applyToActors (others are listed in placedActorsNotUpdated with a warning). Every value is checked before any is written; the reply lists applied and reads every setting back. One undo step; saved.",
+      "whenToUse": [
+        "Pieces must break harder or easier (damageThresholds), collide with other shapes, or keep their hulls from overlapping.",
+        "A placed actor must break with new thresholds: send its actorName, or name it in applyToActors."
+      ],
+      "whenNotToUse": [
+        "Settings on one placed actor's component (collision profile, simulate physics) are wanted: use control_actor edit_component."
+      ]
+    },
+    "schemas": {
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The action to execute on the parent tool."
+          },
+          "geometryCollectionPath": {
+            "type": "string",
+            "description": "Geometry Collection asset path (wins over actorName)."
+          },
+          "actorName": {
+            "type": "string",
+            "description": "An actor in the level whose Geometry Collection component's asset is changed."
+          },
+          "damageThresholds": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0
+            },
+            "description": "Damage needed to break a cluster, per level from the root."
+          },
+          "useSizeSpecificDamageThreshold": {
+            "type": "boolean",
+            "description": "Take thresholds from the size buckets instead."
+          },
+          "damageModel": {
+            "type": "string",
+            "enum": [
+              "user_defined",
+              "material_strength"
+            ],
+            "description": "user_defined uses damageThresholds; material_strength uses the physical material's strength and connectivity."
+          },
+          "enableClustering": {
+            "type": "boolean",
+            "description": "Whether clusters hold pieces together until broken."
+          },
+          "collisionType": {
+            "type": "string",
+            "enum": [
+              "implicit_implicit",
+              "particle_implicit"
+            ],
+            "description": "Collision type of the first size bucket."
+          },
+          "implicitType": {
+            "type": "string",
+            "enum": [
+              "box",
+              "sphere",
+              "capsule",
+              "level_set",
+              "none",
+              "convex"
+            ],
+            "description": "Collision shape of the first size bucket."
+          },
+          "collisionMarginFraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Collision margin as a fraction of the shape size."
+          },
+          "collisionObjectReductionPercentage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Shrink collision shapes by this percent."
+          },
+          "convexRemoveOverlaps": {
+            "type": "string",
+            "enum": [
+              "none",
+              "all",
+              "only_clusters",
+              "only_clusters_vs_clusters"
+            ],
+            "description": "Which convex hull overlaps are cut away (Convex Overlap Removal)."
+          },
+          "convexOverlapShrinkPercent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 99.9,
+            "description": "Compute overlaps as if hulls were shrunk by this percent."
+          },
+          "convexFractionAllowRemove": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 1,
+            "description": "Max fraction of a hull removable before children's hulls are used."
+          },
+          "convexSimplificationThreshold": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Hull simplification distance, cm."
+          },
+          "convexCanExceedFraction": {
+            "type": "number",
+            "minimum": 0,
+            "description": "How far a cluster's hull volume may exceed its geometry (fraction)."
+          },
+          "massAsDensity": {
+            "type": "boolean",
+            "description": "Treat mass as density."
+          },
+          "mass": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Total mass (kg), or density with massAsDensity."
+          },
+          "physicsMaterialPath": {
+            "type": "string",
+            "description": "Physical material for the pieces; empty clears it."
+          },
+          "enableNanite": {
+            "type": "boolean",
+            "description": "Render the pieces with Nanite."
+          },
+          "applyToActors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Placed actors (labels) whose Geometry Collection component should take the asset's damage settings and physical material after the change (Apply Asset Defaults). The actorName used to find the asset is included."
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": false,
+        "requiredOneOf": [
+          "geometryCollectionPath",
+          "actorName"
+        ]
+      },
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the action succeeded."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable result message."
+          },
+          "details": {
+            "type": "object",
+            "x-unreal-reflection-boundary": true,
+            "description": "Additional handler result fields not named by the contract."
+          },
+          "geometryCollectionPath": {
+            "type": "string",
+            "description": "Object path of the collection."
+          },
+          "applied": {
+            "type": "array",
+            "description": "The settings written."
+          },
+          "damageThresholds": {
+            "type": "array",
+            "description": "Damage thresholds read back."
+          },
+          "saved": {
+            "type": "boolean",
+            "description": "Whether the asset was saved."
+          },
+          "updatedActors": {
+            "type": "array",
+            "description": "Actors whose component took the asset's damage settings."
+          },
+          "placedActorsNotUpdated": {
+            "type": "array",
+            "description": "Other actors drawing the asset that still use their own damage settings."
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "examples": [
+      {
+        "title": "Make a collection's clusters break easily and keep hulls from overlapping.",
+        "input": {
+          "action": "configure_geometry_collection",
+          "geometryCollectionPath": "/Game/Props/GC_Vase_Test",
+          "damageThresholds": [
+            50,
+            25,
+            10
+          ],
+          "convexRemoveOverlaps": "all"
+        },
+        "output": {
+          "success": true,
+          "message": "Set 2 Geometry Collection setting(s) on GC_Vase_Test.",
+          "applied": [
+            "damageThresholds",
+            "convexRemoveOverlaps"
+          ],
+          "damageThresholds": [
+            50,
+            25,
+            10
+          ],
+          "saved": true
+        }
+      }
+    ],
+    "availability": {
+      "requiredPlugins": [
+        "GeometryCollectionPlugin"
+      ],
+      "editorStates": [
+        "edit"
+      ]
+    },
+    "behavior": {
+      "effect": "write",
+      "idempotency": "idempotent",
+      "longRunning": false,
+      "safeToRetry": true
+    },
+    "policy": {
+      "requiredScope": "write",
+      "consent": "none",
+      "dataAccess": "project-write"
+    },
+    "cost": {
+      "latency": "interactive",
+      "resources": "medium"
+    },
+    "routing": {
+      "parentTool": "animation_physics",
+      "dispatchAction": "configure_geometry_collection"
+    }
+  }
+]

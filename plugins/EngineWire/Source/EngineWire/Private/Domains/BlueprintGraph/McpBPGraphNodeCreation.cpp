@@ -1,6 +1,7 @@
 #include "Domains/BlueprintGraph/McpBPGraphPrivate.h"
 
 #include "Domains/BlueprintGraph/Behaviour/McpBPBehaviourNodes.h"
+#include "Domains/BlueprintGraph/Code/McpGraphCode.h"
 #include "Editor.h"
 #include "K2Node_MacroInstance.h"
 #include "ScopedTransaction.h"
@@ -59,6 +60,12 @@ static bool TryCreateMacroNode(
             TArray<FString> Supported;
             StandardMacroByType().GenerateKeyArray(Supported);
             Supported.Sort();
+            // IsValid alone is the pure function (the common functions answer first): the macro is K2Node_IsValid.
+            const int32 BareIsValid = Supported.IndexOfByKey(TEXT("IsValid"));
+            if (BareIsValid != INDEX_NONE)
+            {
+                Supported[BareIsValid] = TEXT("K2Node_IsValid");
+            }
             Context.SendError(
                 FString::Printf(
                     TEXT("'MacroInstance' is the node class, not a macro, and "
@@ -146,7 +153,8 @@ bool HandleNodeCreationAction(FActionContext& Context)
         Context.Payload->TryGetNumberField(TEXT("y"), Y);
     }
 
-    if (!(TryCreateCommonFunctionNode(Context, NodeType, X, Y) ||
+    if (!(McpGraphCode::TryCreateMenuNode(Context, X, Y) ||
+          TryCreateCommonFunctionNode(Context, NodeType, X, Y) ||
           TryCreateVariableNode(Context, NodeType, X, Y) ||
           TryCreateFunctionOrEventNode(Context, NodeType, X, Y) ||
           TryCreateCustomEventNode(Context, NodeType, X, Y) ||

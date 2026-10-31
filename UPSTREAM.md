@@ -1,7 +1,9 @@
 # 来源、改动与验证
 
 上游：https://github.com/ChiR24/Unreal_mcp
-固定版本：v0.6.0-beta-f，MIT 许可证。非官方构建。
+固定版本：v0.6.0（2026-10-27 正式版；此前为 v0.6.0-beta-f），MIT 许可证。非官方构建。
+
+升级到 v0.6.0 时逐条核对下列修改：第 1、6 项上游已自带同等 include，第 2 项上游改用 5.3 起可用的 Builder.FindNodeOutputs 重写了别名重试，三者不再另行修改；第 3、4、5、7 项上游仍需要，已重新应用。
 
 UE 5.4 修改：
 
@@ -28,5 +30,26 @@ Mac 编译修改（新版 Apple clang 下才暴露，不影响 Windows）：
 2026-10-23 Mac 构建环境：Apple Silicon，UE 5.4.4，Xcode 27.0（本机 Apple_SDK.json 的 MaxVersion 调到 27.9.0）。RunUAT BuildPlugin -TargetPlatforms=Mac 成功，EngineWire、EngineWireFab 为 Universal dylib，BuildId 33043543。安装到 Engine/Plugins/Marketplace 后已实测编辑器加载、Native MCP 启动于 127.0.0.1:3000、握手与 control_actor.list 只读查询；Mac 上的写入操作尚未验证。
 
 之后在 Mac 上已实测写入：蓝图创建与复制、组件、批量写图表、删节点与函数、生成 Actor、编辑器内 Python、PIE 与截图。其他写入能力首次使用后仍需检查结果。
+
+2026-10-31 Mac 从 v0.6.0 加上述补丁编译：Apple Silicon，UE 5.4.4，Xcode 27.0，RunUAT BuildPlugin -TargetPlatforms=Mac 成功，EngineWire、EngineWireFab、EngineWireValidation 均为 Universal dylib。安装到 Engine/Plugins/Marketplace 后已实测：编辑器加载、Native MCP 启动于 127.0.0.1:3000（serverInfo 版本 0.6.0）、原作用域令牌 helper 无需改动即可连接、search 找到 read_graph_as_code 与 write_graph_from_code、read_graph_as_code 读出蓝图事件图。
+
+蓝图文本读写修复（graph as code，上游 v0.6.0 与 dev 截至 2026-10-31 均未修复，各平台通用，代码在 Domains/BlueprintGraph/Code/）：
+
+8. 中文界面下常用分类（变量、工具|流程控制、类、游戏等）读出为中文、写入按英文匹配：CategoryText 经 FText::FindText("EditorCategoryUtils", 键) 换回引擎英文原文，读写两端统一用英文 id（McpGraphCodeCatalog.cpp）。
+9. Math Expression 的 id 里带括号时解析中断：符号可跨过成对的 (...)（McpGraphCodeParse.cpp，附测试）。
+10. 同名成员混淆（Manager 的 GetSlot 被当成控件的 GetSlot）：按函数或变量所属类匹配（MemberKey）。
+11. 菜单不提供的运算函数（vector * float 等）直接按函数建为普通 CallFunction 节点；原先经函数 spawner 建成可提升运算节点，接上 A 后按 vector * vector 选函数，B 改为浮点也不改回，读回 id 变化且可能断线（McpGraphCodeWriteNodes.cpp）。
+12. 写表达式时每接一个参数重新取引脚：Spawn Actor 的 Class 引脚会重建引脚，旧指针触发 Assertion failed: OwningNode 使编辑器崩溃（McpGraphCodeWriteExpr.cpp、McpGraphCodeWriteOps.cpp）。
+13. 一个纯函数输出被读两次（含同一语句内）时只在开头 bind 一次；排序穿过内联打印的纯函数节点查找依赖，先绑定被依赖的值，避免后面的文本把它整段重写、写回时多出节点（McpGraphCodeDecompile.cpp，附测试）。
+14. 多输出节点的非首个输出（GetSlot 的 Vel）按位置绑定为 (bind (_loc _vel) ...)；原先内联打印会被写回为第一个输出。
+15. (for i (range (+ e 1))) 写回时 e 直接接 LastIndex，不再生成 +1 再 -1 两个节点（McpGraphCodeWriteFlow.cpp）。
+
+2026-10-31 Mac 用含第 8–15 项的构建（rt7）验证：SoldierBurst 两个蓝图（54 节点/59 连线、110/131，含变量读写、多输出函数、ForLoop、Math Expression、vector*float）每段读出再写回，再读文本完全一致，节点与连线数不变，无孤立节点，编译通过。限制：含 SpawnActor<蓝图类> 这类菜单里没有的节点的段，只有保留 `; id` 注释时才能写回（复用原节点）。同日在 Mac 上还实测了材质创建与批量连节点、Niagara 拖尾创建、改参数、换渲染材质、加模块并在 PIE 中显示；Niagara 自定义模块只能经编辑器内 Python 建空模块资产再挂上，模块内部逻辑目前无法经 MCP 编写。Windows 发布包仍为 v0.6.0-beta-f，尚未按 v0.6.0 重新编译。
+
+本仓库新增命令（各平台通用，仅 UE 5.4 构建）：
+
+16. Chaos Geometry Collection 破碎：animation_physics 下的 create_geometry_collection、fracture_geometry_collection、cluster_geometry_collection、get_geometry_collection_info、configure_geometry_collection（代码在 Domains/Animation/Physics/McpAnimGeometryCollection*.cpp）。按 Fracture Mode 的 New、Uniform/Custom Voronoi、Auto Cluster 实现：建 GC 用 FGeometryCollectionEngineConversion::AppendStaticMesh，并按反射读取 Fracture Mode 项目设置里的凸包与邻近默认值；切割照编辑器工具直接调 PlanarCut 的 CutMultipleWithPlanarCells（UE 5.4 的 FFractureEngineFracturing::VoronoiFracture 忽略 Chance To Fracture 与 Group Fracture，故不用）；分组调 FFractureEngineClustering::AutoCluster。思路参考过 CarlxsMG/UEAgent 的 Chaos 命令，未复制其代码。Build.cs 仅在 UE 5.4 且找到 FractureEngine、PlanarCut 时加 GeometryCollectionEngine、Chaos、Voronoi 与延迟加载的 FractureEngine、PlanarCut，并定义 MCP_HAS_GC_FRACTURE；.uplugin 增加可选插件依赖 Fracture、PlanarCut。没有用到 DataflowCore。
+   能力记录不在上游生成的 MCP/Generated/ 里（那里标明不可编辑，生成脚本也不在本仓库），而写在 MCP/Extensions/*.capabilities.json，由 scripts/gen-extension-capabilities.py 生成同格式的 McpExtensionCapabilityShards.*；能力库在生成分片之后加载它们，目录修订号（catalogRevision）由两者共同计算。改 JSON 或升级上游生成分片后需重新运行该脚本。
+   2026-10-31 Mac（gc1 构建）实测：从 SM_PeelShell 新建 GC（1 块，包围盒与手动建的一致）；40 个 site、种子 7 切成 54 块；再切被 ALREADY_FRACTURED 拒绝，4000 个 site 被 TOO_MANY_PIECES 拒绝，均未改动资产；Auto Cluster 8 组，层级 [1, 8, 54]；configure 写入伤害阈值、Convex Overlap Removal 等 4 项后读回一致，撤销恢复、重做再生效；spawnActor 放置 Actor（不模拟）、用 actorName 读取、撤销后移除。实测发现新建 GC 首次保存时引擎报 ensure「CachedDensityFromPhysicsMaterialInGCm3 is not mapped when saving」（保存过程中才缓存密度，两遍序列化不一致），资产仍正常保存；已改为保存前先调用 CacheMaterialDensity()；修复后的 gc2 构建实测新建与切割后保存均无该 ensure，同种子再切同样得到 54 块。随后测试 spawnActor 且 simulatePhysics 为 true 时编辑器崩溃（SIGSEGV，UGeometryCollectionComponent::SetSimulatePhysics → RegisterAndInitializePhysicsProxy → FGeometryCollectionPhysicsProxy::InitializeDynamicCollection）：在编辑器世界调用 SetSimulatePhysics(true) 会立即注册物理代理。已改为只设置 BodyInstance.bSimulatePhysics（与细节面板勾选相同，PIE 开始时生效）。PIE 实测（gc2，不传 simulatePhysics，组件默认即模拟）：从 250 cm 落地，切成 54 块并分 8 组的外壳碎成贴合曲面的薄片；但首次未碎，原因是组件放置时已拷贝资产当时的伤害阈值（500000/50000/5000），之后改资产阈值不影响已放置的 Actor。configure_geometry_collection 因此改为同步 actorName 指定的 Actor 与 applyToActors 点名的 Actor（ApplyAssetDefaults，同一撤销步骤），其余列在 placedActorsNotUpdated；gc4 构建实测：spawnActor 带 simulatePhysics true 不再崩溃；经 actorName 切割、分组、configure 阈值后组件 DamageThreshold 读回 [10, 10, 10]（updatedActors 列出该 Actor），PIE 中不再手动改组件即落地碎开；本次编辑器日志无 ensure 与崩溃。未在 PIE 中验证破碎效果；Windows 未编译。
 
 本仓库不上传测试资产、私有场景、模型、专用动画、截图、认证文件或本机完整日志。

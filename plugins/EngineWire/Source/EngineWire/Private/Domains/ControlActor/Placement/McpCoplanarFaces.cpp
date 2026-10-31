@@ -3,6 +3,7 @@
 #include "Domains/ControlActor/Placement/McpCoplanarFaces.h"
 
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/SplineMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -105,6 +106,21 @@ bool McpCoplanarDrawnInView(const UStaticMeshComponent* Component)
     return Component->bRenderInMainPass && Component->GetClass()->GetFName() != TEXT("WaterBodyInfoMeshComponent");
 }
 
+// Two undersides with something solid right below them are seen from nowhere: carpet trims whose bottoms lay in the
+// carpet's plane on the floor were reported, and fixed, as flicker no camera could show.
+bool McpCoplanarHiddenUnderside(UWorld* World, const FVector& Normal, const FVector& Center, const AActor* A, const AActor* B)
+{
+    if (Normal.Z > -0.99)
+    {
+        return false;
+    }
+    FCollisionQueryParams Params(SCENE_QUERY_STAT(McpCoplanarUnderside), true);
+    Params.AddIgnoredActor(A);
+    Params.AddIgnoredActor(B);
+    FHitResult Hit;
+    return World->LineTraceSingleByChannel(Hit, Center + FVector(0.0, 0.0, 0.5), Center - FVector(0.0, 0.0, 2.0), ECC_Visibility, Params);
+}
+
 TArray<FMcpCoplanarPiece> McpCoplanarCollect(UWorld* World, const FString& NameFilter, const TArray<AActor*>* Focus)
 {
     TArray<FMcpCoplanarPiece> Pieces;
@@ -133,9 +149,14 @@ TArray<FMcpCoplanarPiece> McpCoplanarCollect(UWorld* World, const FString& NameF
         Actor->GetComponents<UStaticMeshComponent>(Components);
         for (const UStaticMeshComponent* Component : Components)
         {
-            // Instanced components hold many transforms under one; their bounds are not one mesh.
+            // Instanced components hold many transforms under one; their bounds are not one mesh. A spline mesh bends its
+            // mesh along a curve, so the mesh's box under its transform is not where its faces are: every segment of a
+            // road read as the same stock cube at the actor's origin, z-fighting with the next.
+            // ponytail: a straight spline segment flush with a slab goes unchecked; take its faces from the sections at
+            // its two ends (CalcSliceTransform) if that flicker needs catching.
             if (!Component || !Component->IsVisible() || Component->bHiddenInGame || !Component->GetStaticMesh() ||
-                Component->IsA<UInstancedStaticMeshComponent>() || !McpCoplanarDrawnInView(Component))
+                Component->IsA<UInstancedStaticMeshComponent>() || Component->IsA<USplineMeshComponent>() ||
+                !McpCoplanarDrawnInView(Component))
             {
                 continue;
             }
@@ -192,6 +213,7 @@ TArray<FMcpCoplanarHit> FindCoplanarFaces(UWorld* World, const FString& NameFilt
             FMcpCoplanarHit Best;
             double AreaA = 0.0;
             double AreaB = 0.0;
+            FVector SmallerCenter = FVector::ZeroVector;
             for (const FMcpCoplanarFace& FaceA : A.Faces)
             {
                 for (const FMcpCoplanarFace& FaceB : B.Faces)
@@ -207,10 +229,11 @@ TArray<FMcpCoplanarHit> FindCoplanarFaces(UWorld* World, const FString& NameFilt
                         Best.OverlapV = V;
                         AreaA = 4.0 * FaceA.HalfU * FaceA.HalfV;
                         AreaB = 4.0 * FaceB.HalfU * FaceB.HalfV;
+                        SmallerCenter = AreaA <= AreaB ? FaceA.Center : FaceB.Center;
                     }
                 }
             }
-            if (Best.OverlapU <= 0.0)
+            if (Best.OverlapU <= 0.0 || McpCoplanarHiddenUnderside(World, Best.Normal, SmallerCenter, A.Actor, B.Actor))
             {
                 continue;
             }

@@ -2,10 +2,15 @@
 
 #include "Editor.h"
 #include "MCP/Transport/McpNativeTransport.h"
+#include "Core/Journal/McpChangeJournal.h"
 #include "Core/Requests/McpRequestOriginRegistry.h"
 #include "Core/Requests/McpResponseCaptureRegistry.h"
+#include "Core/Requests/McpUndoLedger.h"
 #include "Core/Security/McpPrequeueGate.h"
 #include "Core/Subsystem/EngineWireSubsystemResponseEnrichment.h"
+#include "Domains/ControlActor/Placement/McpChangeWatch.h"
+#include "Domains/Debug/Contracts/McpContracts.h"
+#include "Domains/SystemControl/McpSystemValidateDelta.h"
 #include "Foundation/Diagnostics/McpDiagnosticsSnapshot.h"
 #include "Foundation/McpTelemetryRegistry.h"
 #include "Core/Subsystem/EngineWireSubsystemResponseSanitization.h"
@@ -77,6 +82,9 @@ void UEngineWireSubsystem::SendAutomationResponse(
 {
     // A batch running this handler in-process wants the reply as data, not on a wire.
     if (FMcpResponseCaptureRegistry::Get().TryCapture(RequestId, bSuccess, Message, Result, ErrorCode)) { return; }
+    // A reply sent inside the handler's still-open transaction waits until the handler returns (McpUndoLedger::Hold).
+    if (McpUndoLedger::Hold(RequestId, [this, TargetSocket, RequestId, bSuccess, Message, Result, ErrorCode, Origin]()
+        { SendAutomationResponse(TargetSocket, RequestId, bSuccess, Message, Result, ErrorCode, Origin); })) { return; }
 
     ClearAutomationRequestCancellation(RequestId);
 
@@ -88,6 +96,7 @@ void UEngineWireSubsystem::SendAutomationResponse(
     // is unchanged.
     if (bSuccess) { McpPrequeueGate::ForgetConsentForRequest(RequestId); }
     else { McpPrequeueGate::RefundConsentForRequest(RequestId); }
+    McpPrequeueGate::ForgetRequestPrincipal(RequestId);
 
     FString EffectiveMessage = Message;
     FString EffectiveErrorCode = ErrorCode;
@@ -131,6 +140,10 @@ void UEngineWireSubsystem::SendAutomationResponse(
         }
 
         EffectiveResult = McpBuildEnrichedResponseResult(Result, WorldName, bTransientWorld, Captured);
+        McpChangeWatch::AddWarnings(RequestId, EffectiveResult);
+        McpUndoLedger::Describe(RequestId, EffectiveResult);
+        McpChangeJournal::AddUserChangeWarning(RequestId, EffectiveResult);
+        McpValidateDelta::AddWarnings(RequestId, EffectiveResult);
         // A play world paused by the game (a title screen, a pause menu) or by control_editor pause moves nothing: a
         // character moved into it stayed in the air where it was put, which read as broken gravity.
         if (ContextWorld && ContextWorld->IsPlayInEditor() && ContextWorld->IsPaused())
@@ -138,6 +151,9 @@ void UEngineWireSubsystem::SendAutomationResponse(
             EffectiveResult->SetBoolField(TEXT("gamePaused"), true);
         }
     }
+    // What the call expects (options.expect) is judged once its own warnings are in; a failed call judges nothing.
+    if (bSuccess) { McpContracts::AddExpectations(RequestId, EffectiveResult); }
+    else { McpContracts::Forget(RequestId); }
 
     // Dozens of dispatch wrappers hand the handler's `error` sentence straight
     // to the ErrorCode parameter, so a failure rendered as

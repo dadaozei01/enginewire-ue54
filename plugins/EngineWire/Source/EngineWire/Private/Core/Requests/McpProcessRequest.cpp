@@ -2,7 +2,11 @@
 #include "Dom/JsonObject.h"
 #include "HAL/PlatformTime.h"
 #include "Core/Module/EngineWireGlobals.h"
+#include "Core/Journal/McpChangeJournal.h"
+#include "Core/Requests/McpUndoLedger.h"
 #include "Core/Security/McpPrequeueGate.h"
+#include "Domains/ControlActor/Placement/McpChangeWatch.h"
+#include "Domains/Debug/Contracts/McpContracts.h"
 #include "Foundation/BridgeHelpers/McpHelpers.h"
 #include "Foundation/McpTelemetryRegistry.h"
 #include "EngineWireSubsystem.h"
@@ -10,6 +14,8 @@
 #include "Misc/ScopeExit.h"
 #include "Misc/ScopeLock.h"
 #include "Framework/Application/SlateApplication.h" // active-modal pre-flight (Slate is an editor dep)
+#include "Foundation/HandlerUtils/McpHandlerUtils.h"
+#include "Widgets/SWindow.h"
 #include "Foundation/McpScreenshotResample.h" // McpShaderJobsRemaining
 
 // Publish the currently-executing automation action, when it started and its last progress, so a reader off the
@@ -144,10 +150,15 @@ void UEngineWireSubsystem::ProcessAutomationRequest(
            TEXT("ProcessAutomationRequest: refusing dispatch while a modal window is active "
                 "RequestId=%s action='%s'"),
            *RequestId, *Action);
-    SendAutomationError(
-        RequestingSocket, RequestId,
-        TEXT("Editor is waiting on a modal dialog; automation is paused until it is dismissed."),
-        TEXT("EDITOR_MODAL_ACTIVE"));
+    // Named, so the caller can say which dialog to close (the queued requests get the same answer from the modal tick).
+    const FString DialogTitle = FSlateApplication::Get().GetActiveModalWindow()->GetTitle().ToString();
+    TSharedPtr<FJsonObject> ModalResult = McpHandlerUtils::CreateResultObject();
+    ModalResult->SetStringField(TEXT("modalWindowTitle"), DialogTitle);
+    SendAutomationResponse(
+        RequestingSocket, RequestId, false,
+        FString::Printf(TEXT("The editor is waiting on the dialog '%s'; nothing ran. Close that dialog in the editor, then send the same call again."),
+                        *DialogTitle),
+        ModalResult, TEXT("EDITOR_MODAL_ACTIVE"));
     return;
   }
 
@@ -180,6 +191,8 @@ void UEngineWireSubsystem::ProcessAutomationRequest(
 
   {
     ON_SCOPE_EXIT {
+      // A reply held while the handler's transaction was open goes now, with every capture still running.
+      McpUndoLedger::Flush();
       // =====================================================================
       // End Error Capture and check for captured errors
       // =====================================================================
@@ -206,6 +219,9 @@ void UEngineWireSubsystem::ProcessAutomationRequest(
         // engine error.
       }
 
+      McpChangeWatch::End();
+      McpUndoLedger::End();
+      McpChangeJournal::EndRequest();
       bProcessingAutomationRequest = false;
       EngineWire::SetInFlightAction(FString(), FString()); // clear the in-flight action on every exit path
       CurrentRequestOrigin = ERequestOrigin::WebSocket;
@@ -242,12 +258,29 @@ void UEngineWireSubsystem::ProcessAutomationRequest(
     // responses stay aligned with the Unreal log.
     BeginErrorCapture();
     bErrorCaptureStarted = true;
+    // Whatever actors the handler spawns, moves or redraws are checked when it replies (McpChangeWatch::AddWarnings),
+    // and the undo steps it leaves are read from the transaction buffer (McpUndoLedger::Describe).
+    McpChangeWatch::Begin(RequestId);
+    McpUndoLedger::Begin(RequestId);
+    // What changes until the handler returns is this server's doing in the change journal, named by the call.
+    {
+      FString SubAction = Payload.IsValid() ? GetJsonStringField(Payload, TEXT("subAction")) : FString();
+      SubAction = SubAction.IsEmpty() && Payload.IsValid() ? GetJsonStringField(Payload, TEXT("action")) : SubAction;
+      McpChangeJournal::BeginRequest(RequestId, SubAction.IsEmpty() ? Action : Action + TEXT(" ") + SubAction);
+    }
 
     // Map this requestId to the requesting socket so responses can be
     // delivered reliably
     if (!RequestId.IsEmpty() && RequestingSocket.IsValid() &&
         ConnectionManager.IsValid()) {
       ConnectionManager->RegisterRequestSocket(RequestId, RequestingSocket);
+    }
+
+    // What the call requires (options.require) is judged here, inside the request's brackets, so a refusal is
+    // answered like any reply and nothing has run.
+    if (!McpContracts::Admit(*this, RequestId, RequestingSocket)) {
+      bDispatchHandled = true;
+      return;
     }
 
     // ---------------------------------------------------------
@@ -267,4 +300,32 @@ void UEngineWireSubsystem::ProcessAutomationRequest(
         FString::Printf(TEXT("Unknown automation action: %s"), *Action),
         TEXT("UNKNOWN_ACTION"));
   }
+}
+
+bool UEngineWireSubsystem::RunHandlerInProcess(const FString &RequestId, const FString &Action,
+                                               const TSharedPtr<FJsonObject> &Payload,
+                                               TSharedPtr<FMcpBridgeWebSocket> Socket) {
+  const FAutomationHandler *Handler = AutomationHandlers.Find(Action);
+  return Handler && (*Handler)(RequestId, Action, Payload, Socket);
+}
+
+void UEngineWireSubsystem::RunLatentReply(const FString &RequestId, const FString &Action, TFunctionRef<void()> Work) {
+  if (bProcessingAutomationRequest) {
+    Work(); // inside a dispatch already: its brackets are open, and opening them again would end them
+    return;
+  }
+  // As for a dispatch: a dialog the edit raises answers its default instead of blocking the game thread.
+  TGuardValue<bool> UnattendedScriptGuard(GIsRunningUnattendedScript, true);
+  bProcessingAutomationRequest = true;
+  BeginErrorCapture();
+  McpChangeWatch::Begin(RequestId);
+  McpUndoLedger::Begin(RequestId);
+  McpChangeJournal::BeginRequest(RequestId, Action);
+  Work();
+  McpUndoLedger::Flush();
+  EndErrorCapture();
+  McpChangeWatch::End();
+  McpUndoLedger::End();
+  McpChangeJournal::EndRequest();
+  bProcessingAutomationRequest = false;
 }

@@ -13,8 +13,9 @@ const TCHAR* const LogOnlyExecuteFields[] = {
 // What ran, kept when the call named it differently (an alias or another action name) and dropped as an echo otherwise.
 const TCHAR* const ResolvedIdentityFields[] = {TEXT("capabilityId"), TEXT("capability"), TEXT("tool"), TEXT("action")};
 
-// The receipt fields that say what the call did; the rest of a receipt is bookkeeping.
-const TCHAR* const ReceiptOutcomeLists[] = {TEXT("nextCalls"), TEXT("handles"), TEXT("changes"), TEXT("warnings")};
+// The receipt fields that say what the call did (and whether what it expected holds); the rest is bookkeeping.
+const TCHAR* const ReceiptOutcomeLists[] = {TEXT("nextCalls"), TEXT("handles"), TEXT("changes"), TEXT("warnings"),
+	TEXT("expectations")};
 
 // Payload lists the receipt reads into its changes, so a copy of them says nothing once changes lists every entry.
 const TCHAR* const ReceiptListedFields[] = {TEXT("changedAssets"), TEXT("changedEntities"), TEXT("deleted"), TEXT("affectedActors")};
@@ -123,10 +124,15 @@ TSharedPtr<FJsonObject> CompactDetail(const TSharedPtr<FJsonObject>& Detail, con
 	{
 		Out->RemoveField(TEXT("error"));
 	}
-	const TSharedPtr<FJsonObject> Error = ObjectField(Out, TEXT("error"));
-	if (SameField(Error, TEXT("message"), Reply, TEXT("message")) && SameField(Error, TEXT("code"), Reply, TEXT("errorCode")))
+	// The handler's own details (the unsaved packages, the offending parameter) sit in this object too: only the
+	// repeats go.
+	if (const TSharedPtr<FJsonObject> Error = ObjectField(Out, TEXT("error")))
 	{
-		Out->RemoveField(TEXT("error"));
+		const TSharedPtr<FJsonObject> Kept = Copy(Error);
+		if (SameField(Kept, TEXT("message"), Reply, TEXT("message"))) Kept->RemoveField(TEXT("message"));
+		if (SameField(Kept, TEXT("code"), Reply, TEXT("errorCode"))) Kept->RemoveField(TEXT("code"));
+		if (Kept->Values.Num() > 0) Out->SetObjectField(TEXT("error"), Kept);
+		else Out->RemoveField(TEXT("error"));
 	}
 	const TSharedPtr<FJsonObject> Data = ObjectField(Out, TEXT("data"));
 	if (Data && Data->Values.Num() == 0) Out->RemoveField(TEXT("data"));

@@ -2,6 +2,7 @@
 // McpNativeGatewayCanonicalRecords.cpp — see header for the resolution contract.
 
 #include "MCP/Gateway/McpNativeGatewayCapabilityStore.h"
+#include "MCP/Extensions/McpExtensionCapabilityShards.h"
 #include "MCP/Generated/McpGeneratedCapabilityShards.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -14,7 +15,7 @@ FString McpLegacyCapabilityKey(const FString& Tool, const FString& Action)
 FMcpCanonicalRecordIndex FMcpCanonicalRecordIndex::Build()
 {
 	FMcpCanonicalRecordIndex Index;
-	Index.CatalogRevision = McpGeneratedCapabilityShards::CatalogRevision();
+	Index.CatalogRevision = McpExtensionCapabilityShards::CatalogRevision();
 
 	const FMcpCapabilityStore& Store = FMcpCapabilityStore::Get();
 	if (!Store.IsReady())
@@ -47,11 +48,12 @@ FMcpCanonicalRecordIndex FMcpCanonicalRecordIndex::Build()
 		}
 	}
 
-	if (Index.RecordsById.Num() != McpGeneratedCapabilityShards::TotalRecordCount())
+	const int32 Declared = McpGeneratedCapabilityShards::TotalRecordCount() + McpExtensionCapabilityShards::TotalRecordCount();
+	if (Index.RecordsById.Num() != Declared)
 	{
 		Index.LoadError = FString::Printf(
-			TEXT("resolved %d records but the generated index declares %d"),
-			Index.RecordsById.Num(), McpGeneratedCapabilityShards::TotalRecordCount());
+			TEXT("resolved %d records but the generated and extension indexes declare %d"),
+			Index.RecordsById.Num(), Declared);
 		Index.RecordsById.Reset();
 		Index.LegacyToCapabilityId.Reset();
 		Index.CapabilityIdToLegacyAction.Reset();

@@ -21,6 +21,16 @@ bool HandleAnimationSetupPhysicsSimulationAction(FActionContext &Context,
                const TSharedPtr<FJsonObject> &Payload);
 bool HandleAnimationCreatePhysicalMaterialAction(FActionContext &Context,
                const TSharedPtr<FJsonObject> &Payload);
+bool HandleAnimationCreateGeometryCollectionAction(FActionContext &Context,
+               const TSharedPtr<FJsonObject> &Payload);
+bool HandleAnimationFractureGeometryCollectionAction(FActionContext &Context,
+               const TSharedPtr<FJsonObject> &Payload);
+bool HandleAnimationClusterGeometryCollectionAction(FActionContext &Context,
+               const TSharedPtr<FJsonObject> &Payload);
+bool HandleAnimationGetGeometryCollectionInfoAction(FActionContext &Context,
+               const TSharedPtr<FJsonObject> &Payload);
+bool HandleAnimationConfigureGeometryCollectionAction(FActionContext &Context,
+               const TSharedPtr<FJsonObject> &Payload);
 bool HandleAnimationCreateAnimationAssetAction(FActionContext &Context,
                const TSharedPtr<FJsonObject> &Payload);
 bool HandleAnimationCreatePoseLibraryAction(FActionContext &Context,

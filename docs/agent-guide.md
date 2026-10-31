@@ -36,6 +36,24 @@
 - 资产改名：单个用 asset.rename；多个各自不同的新名字用 manage_asset maintain_content（maintenance=bulk_rename）的 renames 列表一次完成，改完 list 读回。改名会留下重定向器，需要清理时用 maintenance=fixup_redirectors。
 - 重命名当前打开的关卡后，编辑器会切到 /Temp/Untitled_N 临时世界（Windows 实测），需提醒用户重新打开改名后的关卡。
 
+## 先找已有能力
+
+- 判断"没有这个能力"或改用 Python 自写前，换 2–3 组动词和对象再 search，或按 domain 过滤，或 describe 不带选择器逐层浏览。只搜一次就下结论容易漏。
+- 动态效果验证先用：control_editor 的 step_frame（暂停后逐帧推进）、control_actor 的 sample_motion（按游戏时间采样位置、速度和指定属性，可定时模拟按键）、screenshot、inspect 的 describe_view 与 capture_passes。不在用户编辑器里挂临时 tick 回调。
+- 改蓝图逻辑先用 manage_blueprint 的 read_graph_as_code 读成文本，改完用 write_graph_from_code 写回（Epic 5.8 蓝图 DSL 文本格式，0.6.0 起），少用逐节点建线；改完 compile 并检查无用节点。本仓库已修复中文界面、多输出函数、运算节点等读写问题（UPSTREAM.md 第 8–15 项）；写回时保留读出的 `; id` 注释，菜单里没有的节点（如 SpawnActor<蓝图类>）靠它复用原节点，去掉注释会被整体拒绝。写入失败会整体拒绝，不会写坏蓝图。
+- Niagara：create_effect 建拖尾后读回 SpawnRate.SpawnRate，若为 0 用 set_parameter_value 重设；跟随拖尾（LocationBasedRibbon）的发射器静止且粒子无速度时长度为 0、看不到。看特效以 PIE 画面为准，截图回执里"视口不是实时"的提示在 PIE 下也会出现。用户开着某资产的 Niagara 编辑器时，其副本保存会覆盖 MCP 写入。
+
 ## 故障定位
 
-MCP off：检查开关、重启及 UE 日志。401/403：检查工程身份、动态令牌和请求头。连接拒绝：确认端口和运行进程。工具不存在：重载 Agent 配置，确认使用匹配的 0.6 beta 客户端/代理。不要输出令牌排错。
+## Chaos 破碎（Geometry Collection）
+
+本仓库新增（UPSTREAM.md 第 16 项），在 animation_physics 下，search「geometry collection」「voronoi fracture」「破碎」可找到。只在 UE 5.4 构建中提供，其他版本返回 NOT_SUPPORTED；切割与分组需工程启用 Fracture、PlanarCut 插件。
+
+- create_geometry_collection：Fracture Mode 的 New。staticMeshPaths 一个或多个，name 默认 GC_<网格名>，path 默认网格所在目录；同名资产已存在时拒绝，不覆盖。spawnActor 可同时在关卡放 Actor（location、rotation、actorLabel、simulatePhysics）。
+- fracture_geometry_collection：Uniform Voronoi（siteCount，可选 siteCountMax）或 Custom Voronoi（sites，资产空间坐标）；randomSeed（-1 随机并在回执返回）、chanceToFracture、groupFracture（默认 true）、grout、noise*、collisionSampleSpacing、boneIndices。已切过的 GC 默认拒绝（ALREADY_FRACTURED），预估碎块超过 maxPieces（默认 2000）拒绝（TOO_MANY_PIECES），都在切之前判断。要重切就新建一个 GC，不要对已切的再切。
+- cluster_geometry_collection：Auto Cluster，clusterSizeMethod by_number / by_fraction / by_size / by_grid，默认对根节点分组。
+- get_geometry_collection_info：只读，碎块数、簇数、层级与每层数量、包围盒、三角形数和物理设置。
+- configure_geometry_collection：已放进关卡的 Actor，其组件在放置时拷贝了一份资产的伤害阈值、伤害模型和物理材质，之后改资产不会影响它（引擎行为）。用 actorName 指定时会同步该 Actor，其他 Actor 用 applyToActors 点名，没点名的列在 placedActorsNotUpdated 并提示。可设置：伤害阈值（每层一个）、damageModel、enableClustering、第一个尺寸档的碰撞类型与形状、Convex Overlap Removal 与凸包参数、质量、物理材质、Nanite。走细节面板同一条重建路径，先校验全部参数再写入。
+- 写操作各为一个撤销步骤，之后保存资产；Actor 上组件级设置（碰撞配置、Simulate Physics）仍用 control_actor。Field（Anchor/Disable）相关命令尚未提供。
+
+MCP off：检查开关、重启及 UE 日志。401/403：检查工程身份、动态令牌和请求头。连接拒绝：确认端口和运行进程。工具不存在：重载 Agent 配置，确认使用匹配的 0.6 客户端/代理。不要输出令牌排错。

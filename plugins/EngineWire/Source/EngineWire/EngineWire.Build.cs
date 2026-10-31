@@ -34,15 +34,29 @@ public class EngineWire : ModuleRules {
 
         AddEngineThirdPartyPrivateStaticDependencies(Target, "OpenSSL");
 
-        PrivateDependencyModuleNames.AddRange(new string[] { "LandscapeEditor", "LandscapeEditorUtilities", "Foliage", "FoliageEdit", "AnimGraph", "AnimationBlueprintLibrary", "Persona", "ToolMenus", "EditorWidgets", "PropertyEditor", "LevelEditor", "RigVM", "RigVMDeveloper", "UMG", "UMGEditor", "MergeActors", "RenderCore", "RHI", "ImageWrapper", "AutomationController", "GameplayDebugger", "TraceLog", "TraceAnalysis", "AIGraph", "MeshUtilities", "MeshMergeUtilities", "MaterialUtilities", "PhysicsCore", "ClothingSystemRuntimeCommon", "ClothingSystemRuntimeInterface", "PhysicsUtilities", "GeometryCore", "GeometryFramework", "DynamicMesh", "MeshDescription", "StaticMeshDescription", "SkeletalMeshDescription", "NavigationSystem", "MeshConversion", "AnimationCore", "BSPUtils" });
+        PrivateDependencyModuleNames.AddRange(new string[] { "LandscapeEditor", "LandscapeEditorUtilities", "Foliage", "FoliageEdit", "AnimGraph", "AnimationBlueprintLibrary", "Persona", "ToolMenus", "EditorWidgets", "PropertyEditor", "LevelEditor", "RigVM", "RigVMDeveloper", "UMG", "UMGEditor", "MergeActors", "RenderCore", "RHI", "ImageWrapper", "AutomationController", "GameplayDebugger", "TraceLog", "TraceAnalysis", "AIGraph", "MeshUtilities", "MeshMergeUtilities", "MaterialUtilities", "PhysicsCore", "ClothingSystemRuntimeCommon", "ClothingSystemRuntimeInterface", "PhysicsUtilities", "GeometryCore", "GeometryFramework", "DynamicMesh", "MeshDescription", "StaticMeshDescription", "SkeletalMeshDescription", "NavigationSystem", "MeshConversion", "AnimationCore", "BSPUtils", "MessageLog" });
 
         string EngineDir = Path.GetFullPath(Target.RelativeEnginePath);
-        AddOptionalModules(Target, EngineDir, new string[] { "D|GameplayAbilities|GameplayAbilities", "D|MetasoundEngine|MetasoundEngine", "C|MetasoundFrontend|MetasoundFrontend", "D|MetasoundEditor|MetasoundEditor", "D|StateTreeModule|StateTreeModule", "D|StateTreeEditorModule|StateTreeEditorModule", "D|SmartObjectsModule|SmartObjectsModule", "D|SmartObjectsEditorModule|SmartObjectsEditorModule", "C|StructUtils|StructUtils", "D|MassEntity|MassEntity", "D|MassSpawner|MassSpawner", "D|MassActors|MassActors", "D|OnlineSubsystem|OnlineSubsystem", "D|OnlineSubsystemUtils|OnlineSubsystemUtils", "D|ControlRig|ControlRig", "D|ControlRigDeveloper|ControlRigDeveloper", "D|ControlRigEditor|ControlRigEditor", "D|ProceduralMeshComponent|ProceduralMeshComponent", "D|EnvironmentQueryEditor|EnvironmentQueryEditor", "D|GeometryScriptingCore|GeometryScriptingCore", "D|GeometryScriptingEditor|GeometryScriptingEditor" });
+        // PropertyBindingUtils (UE 5.6+) owns the base of the State Tree compiler log's message items, whose destructor the State Tree compile links against.
+        AddOptionalModules(Target, EngineDir, new string[] { "D|GameplayAbilities|GameplayAbilities", "D|MetasoundEngine|MetasoundEngine", "C|MetasoundFrontend|MetasoundFrontend", "D|MetasoundEditor|MetasoundEditor", "D|StateTreeModule|StateTreeModule", "D|StateTreeEditorModule|StateTreeEditorModule", "D|PropertyBindingUtils|PropertyBindingUtils", "D|SmartObjectsModule|SmartObjectsModule", "D|SmartObjectsEditorModule|SmartObjectsEditorModule", "C|StructUtils|StructUtils", "D|MassEntity|MassEntity", "D|MassSpawner|MassSpawner", "D|MassActors|MassActors", "D|OnlineSubsystem|OnlineSubsystem", "D|OnlineSubsystemUtils|OnlineSubsystemUtils", "D|ControlRig|ControlRig", "D|ControlRigDeveloper|ControlRigDeveloper", "D|ControlRigEditor|ControlRigEditor", "D|ProceduralMeshComponent|ProceduralMeshComponent", "D|EnvironmentQueryEditor|EnvironmentQueryEditor", "D|GeometryScriptingCore|GeometryScriptingCore", "D|GeometryScriptingEditor|GeometryScriptingEditor" });
 
         // Catmull-Clark, Loop and bilinear subdivision (FSubdividePoly, over OpenSubdiv) live in MeshModelingToolset's editor module.
         // It is added like GeometryScriptingCore above, delay-loaded, and the handler refuses clearly when it is not there.
         bool bHasSubdividePoly = AddOptionalModule(Target, EngineDir, "ModelingComponentsEditorOnly", "ModelingComponentsEditorOnly", true);
         PublicDefinitions.Add(bHasSubdividePoly ? "MCP_HAS_SUBDIVIDE_POLY=1" : "MCP_HAS_SUBDIVIDE_POLY=0");
+
+        // Geometry Collection create, Voronoi fracture and auto cluster call PlanarCut's CutMultipleWithPlanarCells and
+        // FractureEngine's AutoCluster, whose signatures were checked against UE 5.4 only. Other engines compile the
+        // handlers out and refuse with NOT_SUPPORTED. The two plugin modules are delay-loaded like the ones above, and
+        // the handlers check that the Fracture and PlanarCut plugins are enabled before calling into them.
+        bool bHasGcFracture = Target.Version.MajorVersion == 5 && Target.Version.MinorVersion == 4 &&
+            FindOptionalModule(EngineDir, "FractureEngine") && FindOptionalModule(EngineDir, "PlanarCut");
+        if (bHasGcFracture) {
+            PrivateDependencyModuleNames.AddRange(new string[] { "GeometryCollectionEngine", "Chaos", "Voronoi" });
+            AddOptionalModule(Target, EngineDir, "FractureEngine", "FractureEngine", true);
+            AddOptionalModule(Target, EngineDir, "PlanarCut", "PlanarCut", true);
+        }
+        PublicDefinitions.Add(bHasGcFracture ? "MCP_HAS_GC_FRACTURE=1" : "MCP_HAS_GC_FRACTURE=0");
 
         ProjectDescriptor Project = Target.ProjectFile == null ? null : ProjectDescriptor.FromFile(Target.ProjectFile);
         PluginDescriptor Bridge = PluginDescriptor.FromFile(new FileReference(Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "EngineWire.uplugin"))));

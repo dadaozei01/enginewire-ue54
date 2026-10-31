@@ -1,6 +1,7 @@
 #include "Domains/Environment/McpEnvShared.h"
 #include "Domains/Environment/Inspection/McpEnvInspectViewIds.h"
 #include "Domains/ControlEditor/McpEditorScreenshotSupport.h"
+#include "Domains/Perception/McpPerception.h"
 
 #include "Components/InstancedStaticMeshComponent.h"
 #include "EditorViewportClient.h"
@@ -51,48 +52,24 @@ bool HandleInspectViewContentsAction(
     const TSharedPtr<FJsonObject> &Payload,
     TSharedPtr<FMcpBridgeWebSocket> RequestingSocket)
 {
-    if (GEditor->PlayWorld && !GEditor->bIsSimulatingInEditor)
+    // saveAs and compareWith read the frame as the game draws it: a selection outline or a gizmo is no change.
+    const FString SaveAs = GetJsonStringField(Payload, TEXT("saveAs"));
+    const bool bDiff = !SaveAs.IsEmpty() || !GetJsonStringField(Payload, TEXT("compareWith")).IsEmpty();
+    TSharedPtr<FJsonObject> CameraPayload;
+    TSharedPtr<FJsonObject> Change;
+    FMcpViewCapture View;
+    FString CaptureError, CaptureCode;
+    if (!McpPerception::PrepareViewDiff(Payload, CameraPayload, CaptureError, CaptureCode) ||
+        !McpCaptureView(CameraPayload, TEXT("describe_view"), bDiff, View, CaptureError, CaptureCode) ||
+        (bDiff && !McpPerception::DiffView(Payload, View, Change, CaptureError, CaptureCode)))
     {
-        Bridge.SendAutomationError(RequestingSocket, RequestId,
-            TEXT("describe_view reads the level viewport, which does not show the running game; stop Play In Editor first (Simulate is fine)."),
-            TEXT("PIE_RUNNING"));
+        Bridge.SendAutomationError(RequestingSocket, RequestId, CaptureError, CaptureCode);
         return true;
     }
-    // A level viewport under another major tab is not painted and reads back black.
-    if (BringLevelEditorTabToFrontForMcp())
-    {
-        Bridge.SendAutomationError(RequestingSocket, RequestId,
-            TEXT("The level viewport was under another tab and has been brought forward; call again to read it."),
-            TEXT("VIEWPORT_NOT_READY"));
-        return true;
-    }
-    FEditorViewportClient *Client = GetActiveEditorViewportClientForMcp();
-    FViewport *Viewport = Client ? Client->Viewport : nullptr;
-    const FIntPoint Size = Viewport ? Viewport->GetSizeXY() : FIntPoint::ZeroValue;
-    if (Size.X <= 0 || Size.Y <= 0)
-    {
-        Bridge.SendAutomationError(RequestingSocket, RequestId, TEXT("No level viewport with a size is open."),
-            TEXT("VIEWPORT_NOT_AVAILABLE"));
-        return true;
-    }
-
-    // The first frames after a camera move still carry the old view's occlusion; a few frames later they match.
-    const bool bMoved = Payload->HasField(TEXT("location")) || Payload->HasField(TEXT("rotation"));
-    Client->SetViewLocation(ExtractVectorField(Payload, TEXT("location"), Client->GetViewLocation()));
-    Client->SetViewRotation(ExtractRotatorField(Payload, TEXT("rotation"), Client->GetViewRotation()));
-    Client->Invalidate();
-    DrawViewportFramesForMcp(Viewport, Client->GetWorld(), bMoved ? 3 : 1);
-    TArray<FColor> Colors;
-    Viewport->ReadPixels(Colors, FReadSurfaceDataFlags(RCM_UNorm));
-    Viewport->InvalidateHitProxy();
-    const TArray<FColor> &Ids = Viewport->GetRawHitProxyData(FIntRect(0, 0, Size.X, Size.Y));
-    const int32 PixelCount = Size.X * Size.Y;
-    if (Colors.Num() != PixelCount || Ids.Num() != PixelCount)
-    {
-        Bridge.SendAutomationError(RequestingSocket, RequestId, TEXT("The viewport's pixels or ids could not be read."),
-            TEXT("CAPTURE_FAILED"));
-        return true;
-    }
+    FEditorViewportClient *Client = View.Client;
+    const FIntPoint Size = View.Size;
+    const TArray<FColor> &Colors = View.Colors;
+    const TArray<FColor> &Ids = View.Ids;
 
     TMap<uint32, FMcpViewProxy> Proxies;
     TMap<AActor *, FMcpViewActor> Seen;
@@ -161,6 +138,7 @@ bool HandleInspectViewContentsAction(
     const FVector Camera = Client->GetViewLocation();
     const auto Percent = [Samples](int64 Count) { return McpViewRound(100.0 * Count / Samples, 100.0); };
     TArray<TSharedPtr<FJsonValue>> Listed;
+    TArray<FIntRect> ListedBoxes;
     for (const FMcpViewActor &Row : Rows)
     {
         if (Requested && !Named.Contains(Row.Actor))
@@ -186,7 +164,22 @@ bool HandleInspectViewContentsAction(
         const double Distance = Bounds.IsValid ? FMath::Sqrt(Bounds.ComputeSquaredDistanceToPoint(Camera))
                                                : FVector::Dist(Row.Actor->GetActorLocation(), Camera);
         Item->SetNumberField(TEXT("distance"), FMath::RoundToDouble(Distance));
+        const TArray<TSharedPtr<FJsonValue>> CoveredBy = Requested ? McpCoveringActors(Row.Actor, *Client, Size, Ids, Proxies) : TArray<TSharedPtr<FJsonValue>>();
+        if (CoveredBy.Num() > 0) Item->SetArrayField(TEXT("coveredBy"), CoveredBy);
         Listed.Add(MakeShared<FJsonValueObject>(Item));
+        ListedBoxes.Add(FIntRect(Row.MinX, Row.MinY, FMath::Min(Row.MaxX + McpViewStride, Size.X),
+                                 FMath::Min(Row.MaxY + McpViewStride, Size.Y)));
+    }
+    // points: what is under spots of the frame, as drawn and in the world.
+    const TArray<TSharedPtr<FJsonValue>> *Points = nullptr;
+    TArray<TSharedPtr<FJsonValue>> PointRows;
+    FString PointError;
+    if (Payload->TryGetArrayField(TEXT("points"), Points) && Points &&
+        !McpDescribeViewPoints(*Client, Size, Ids, Proxies, *Points, FMath::Clamp(GetJsonIntField(Payload, TEXT("tolerance"), 0), 0, 16),
+                               PointRows, PointError))
+    {
+        Bridge.SendAutomationError(RequestingSocket, RequestId, PointError, TEXT("INVALID_ARGUMENT"));
+        return true;
     }
 
     const auto Percentile = [&Histogram, Samples](double Fraction) {
@@ -220,6 +213,24 @@ bool HandleInspectViewContentsAction(
     {
         Result->SetArrayField(TEXT("notVisible"), NotVisible);
         Result->SetArrayField(TEXT("notFound"), NotFound);
+    }
+    if (Points)
+    {
+        Result->SetArrayField(TEXT("points"), PointRows);
+    }
+    if (Change)
+    {
+        Result->SetObjectField(TEXT("change"), Change);
+    }
+    if (!SaveAs.IsEmpty())
+    {
+        Result->SetStringField(TEXT("savedAs"), SaveAs);
+    }
+    // labels: the frame with each actor listed above boxed and numbered in list order, returned as an image.
+    if (GetJsonBoolField(Payload, TEXT("labels"), false))
+    {
+        Result->SetStringField(TEXT("imageBase64"), McpLabelledViewPng(Colors, Size, ListedBoxes));
+        Result->SetStringField(TEXT("mimeType"), TEXT("image/png"));
     }
     McpHandlerUtils::MarkNoAssetsChanged(Result);
     const FString Message = Requested

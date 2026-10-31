@@ -1,4 +1,8 @@
 #include "Domains/Environment/McpEnvShared.h"
+#include "Core/Journal/McpChangeJournal.h"
+#include "Domains/Debug/Explain/McpExplain.h"
+#include "Domains/Debug/Logpoints/McpLogpoints.h"
+#include "Domains/Perception/McpPerception.h"
 
 // Struct ecosystem (issue #struct-ecosystem) — inspect_struct handler shard forward declaration.
 namespace McpInspectStruct
@@ -91,6 +95,38 @@ bool UEngineWireSubsystem::HandleInspectAction(
     if (LowerSubAction.Equals(TEXT("describe_view")))
     {
         return HandleInspectViewContentsAction(*this, RequestId, Payload, RequestingSocket);
+    }
+    if (LowerSubAction.Equals(TEXT("analyze_view")))
+    {
+        return McpPerception::HandleAnalyzeView(*this, RequestId, Payload, RequestingSocket);
+    }
+    if (LowerSubAction.Equals(TEXT("contact_sheet")))
+    {
+        return McpPerception::HandleContactSheet(*this, RequestId, Payload, RequestingSocket);
+    }
+    if (LowerSubAction.Equals(TEXT("audit_materials")))
+    {
+        return McpPerception::HandleAuditMaterials(*this, RequestId, Payload, RequestingSocket);
+    }
+    if (LowerSubAction.Equals(TEXT("get_editor_focus")))
+    {
+        return HandleInspectEditorFocusAction(*this, RequestId, RequestingSocket);
+    }
+    if (LowerSubAction.Equals(TEXT("get_frame_cost")))
+    {
+        return HandleInspectFrameCostAction(*this, RequestId, RequestingSocket);
+    }
+    if (LowerSubAction.StartsWith(TEXT("explain_")))
+    {
+        return McpExplain::Handle(*this, RequestId, LowerSubAction, Payload, RequestingSocket);
+    }
+    if (LowerSubAction.EndsWith(TEXT("_logpoints")))
+    {
+        return McpLogpoints::Handle(*this, RequestId, LowerSubAction, Payload, RequestingSocket);
+    }
+    if (LowerSubAction.Equals(TEXT("changes_since")))
+    {
+        return McpChangeJournal::HandleChangesSince(*this, RequestId, Payload, RequestingSocket);
     }
     if (LowerSubAction.Equals(TEXT("capture_passes")))
     {

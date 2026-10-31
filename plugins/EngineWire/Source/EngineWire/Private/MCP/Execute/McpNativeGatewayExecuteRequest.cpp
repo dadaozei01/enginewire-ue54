@@ -2,6 +2,7 @@
 
 #include "MCP/Execute/McpNativeGatewayExecuteRequest.h"
 #include "MCP/Execute/McpNativeGatewayCanonicalRecords.h"
+#include "MCP/Execute/Request/McpExecuteContractOptions.h"
 #include "MCP/Execute/Request/McpNativeGatewayReservedParams.h"
 #include "MCP/Gateway/McpNativeGatewayCapabilityStore.h"
 #include "MCP/Gateway/McpNativeGatewayCatalog.h"
@@ -13,6 +14,9 @@ const TArray<FString>& McpExecutionOptionKeys()
 		TEXT("expectedCatalogRevision"),
 		TEXT("expectedRevisions"),
 		TEXT("timeoutMs"),
+		TEXT("pageCursor"),
+		TEXT("expect"),
+		TEXT("require"),
 	};
 	return Keys;
 }
@@ -74,13 +78,23 @@ bool McpValidateExecutionOptions(
 		}
 	}
 
+	// The cursor of a paged result's page block (McpNativeResultPages.cpp), as gateway-option-validate.ts checks it.
+	const TSharedPtr<FJsonValue> Cursor = Options->TryGetField(TEXT("pageCursor"));
+	if (Cursor.IsValid() && (Cursor->Type != EJson::String || Cursor->AsString().TrimStartAndEnd().IsEmpty() || Cursor->AsString().Len() > 64))
+	{
+		OutError = McpValidationError(TEXT("INVALID_OPTIONS"),
+			TEXT("options.pageCursor must be the cursor string of a page block (1..64 characters)."), TEXT("/options/pageCursor"));
+		return false;
+	}
+
 	// Mirrors the 1..128 bound in gateway-execute-validate.ts. Only the key NAME
 	// was checked here, so a malformed value fell through to TryGetStringField in
 	// McpNativeTransportGatewayExecute, left Context.IdempotencyId empty and took
 	// the no-ledger path: a retry re-ran the mutation that the stdio surface had
 	// already refused. A dedup guard that cannot be honoured must refuse. It lives
-	// in McpNativeGatewayIdempotency.cpp because this file is at the line ceiling.
-	return McpValidateIdempotencyKeyOption(Options, OutError);
+	// in McpNativeGatewayIdempotency.cpp because this file is at the line ceiling,
+	// as the expect and require checks live in Request/McpExecuteContractOptions.cpp.
+	return McpValidateIdempotencyKeyOption(Options, OutError) && McpExecuteContracts::Validate(Options, OutError);
 }
 
 namespace
