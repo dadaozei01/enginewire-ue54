@@ -45,6 +45,19 @@ public class EngineWire : ModuleRules {
         bool bHasSubdividePoly = AddOptionalModule(Target, EngineDir, "ModelingComponentsEditorOnly", "ModelingComponentsEditorOnly", true);
         PublicDefinitions.Add(bHasSubdividePoly ? "MCP_HAS_SUBDIVIDE_POLY=1" : "MCP_HAS_SUBDIVIDE_POLY=0");
 
+        // Geometry Collection create, Voronoi fracture and auto cluster call PlanarCut's CutMultipleWithPlanarCells and
+        // FractureEngine's AutoCluster, whose signatures were checked against UE 5.4 only. Other engines compile the
+        // handlers out and refuse with NOT_SUPPORTED. The two plugin modules are delay-loaded like the ones above, and
+        // the handlers check that the Fracture and PlanarCut plugins are enabled before calling into them.
+        bool bHasGcFracture = Target.Version.MajorVersion == 5 && Target.Version.MinorVersion == 4 &&
+            FindOptionalModule(EngineDir, "FractureEngine") && FindOptionalModule(EngineDir, "PlanarCut");
+        if (bHasGcFracture) {
+            PrivateDependencyModuleNames.AddRange(new string[] { "GeometryCollectionEngine", "Chaos", "Voronoi" });
+            AddOptionalModule(Target, EngineDir, "FractureEngine", "FractureEngine", true);
+            AddOptionalModule(Target, EngineDir, "PlanarCut", "PlanarCut", true);
+        }
+        PublicDefinitions.Add(bHasGcFracture ? "MCP_HAS_GC_FRACTURE=1" : "MCP_HAS_GC_FRACTURE=0");
+
         ProjectDescriptor Project = Target.ProjectFile == null ? null : ProjectDescriptor.FromFile(Target.ProjectFile);
         PluginDescriptor Bridge = PluginDescriptor.FromFile(new FileReference(Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "EngineWire.uplugin"))));
         // UE 5.8 PCG exports a data symbol (PCG::Private::UserParameterTagData), and MSVC cannot delay-load a DLL

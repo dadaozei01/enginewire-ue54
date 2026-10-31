@@ -155,6 +155,16 @@
       "Optional": true
     },
     {
+      "Name": "Fracture",
+      "Enabled": true,
+      "Optional": true
+    },
+    {
+      "Name": "PlanarCut",
+      "Enabled": true,
+      "Optional": true
+    },
+    {
       "Name": "GameplayAbilities",
       "Enabled": true
     },

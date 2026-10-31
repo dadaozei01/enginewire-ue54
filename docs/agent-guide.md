@@ -45,4 +45,15 @@
 
 ## 故障定位
 
+## Chaos 破碎（Geometry Collection）
+
+本仓库新增（UPSTREAM.md 第 16 项），在 animation_physics 下，search「geometry collection」「voronoi fracture」「破碎」可找到。只在 UE 5.4 构建中提供，其他版本返回 NOT_SUPPORTED；切割与分组需工程启用 Fracture、PlanarCut 插件。
+
+- create_geometry_collection：Fracture Mode 的 New。staticMeshPaths 一个或多个，name 默认 GC_<网格名>，path 默认网格所在目录；同名资产已存在时拒绝，不覆盖。spawnActor 可同时在关卡放 Actor（location、rotation、actorLabel、simulatePhysics）。
+- fracture_geometry_collection：Uniform Voronoi（siteCount，可选 siteCountMax）或 Custom Voronoi（sites，资产空间坐标）；randomSeed（-1 随机并在回执返回）、chanceToFracture、groupFracture（默认 true）、grout、noise*、collisionSampleSpacing、boneIndices。已切过的 GC 默认拒绝（ALREADY_FRACTURED），预估碎块超过 maxPieces（默认 2000）拒绝（TOO_MANY_PIECES），都在切之前判断。要重切就新建一个 GC，不要对已切的再切。
+- cluster_geometry_collection：Auto Cluster，clusterSizeMethod by_number / by_fraction / by_size / by_grid，默认对根节点分组。
+- get_geometry_collection_info：只读，碎块数、簇数、层级与每层数量、包围盒、三角形数和物理设置。
+- configure_geometry_collection：已放进关卡的 Actor，其组件在放置时拷贝了一份资产的伤害阈值、伤害模型和物理材质，之后改资产不会影响它（引擎行为）。用 actorName 指定时会同步该 Actor，其他 Actor 用 applyToActors 点名，没点名的列在 placedActorsNotUpdated 并提示。可设置：伤害阈值（每层一个）、damageModel、enableClustering、第一个尺寸档的碰撞类型与形状、Convex Overlap Removal 与凸包参数、质量、物理材质、Nanite。走细节面板同一条重建路径，先校验全部参数再写入。
+- 写操作各为一个撤销步骤，之后保存资产；Actor 上组件级设置（碰撞配置、Simulate Physics）仍用 control_actor。Field（Anchor/Disable）相关命令尚未提供。
+
 MCP off：检查开关、重启及 UE 日志。401/403：检查工程身份、动态令牌和请求头。连接拒绝：确认端口和运行进程。工具不存在：重载 Agent 配置，确认使用匹配的 0.6 客户端/代理。不要输出令牌排错。

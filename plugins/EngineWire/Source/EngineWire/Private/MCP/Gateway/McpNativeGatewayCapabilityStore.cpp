@@ -3,6 +3,7 @@
 // McpNativeGatewayCapabilityStore.cpp — see header for the fail-closed contract.
 
 #include "MCP/Gateway/McpNativeGatewayFolding.h"
+#include "MCP/Extensions/McpExtensionCapabilityShards.h"
 #include "MCP/Generated/McpGeneratedCapabilityShards.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -135,10 +136,19 @@ FMcpCapabilityStore FMcpCapabilityStore::FromShards()
 	FMcpCapabilityStore Store;
 	TArray<FMcpCapabilityRecord> Loaded;
 
+	// The generated shards, then this repository's own records (MCP/Extensions), which take the same form.
+	TArray<const McpGeneratedCapabilityShards::FMcpCapabilityShard*> Shards;
 	for (int32 ShardIndex = 0; ShardIndex < McpGeneratedCapabilityShards::Num(); ++ShardIndex)
 	{
-		const McpGeneratedCapabilityShards::FMcpCapabilityShard& Shard =
-			McpGeneratedCapabilityShards::At(ShardIndex);
+		Shards.Add(&McpGeneratedCapabilityShards::At(ShardIndex));
+	}
+	for (int32 ShardIndex = 0; ShardIndex < McpExtensionCapabilityShards::Num(); ++ShardIndex)
+	{
+		Shards.Add(&McpExtensionCapabilityShards::At(ShardIndex));
+	}
+	for (const McpGeneratedCapabilityShards::FMcpCapabilityShard* ShardPtr : Shards)
+	{
+		const McpGeneratedCapabilityShards::FMcpCapabilityShard& Shard = *ShardPtr;
 		const FString Payload = ConcatenateShard(Shard);
 
 		TArray<TSharedPtr<FJsonValue>> Entries;
@@ -174,19 +184,19 @@ FMcpCapabilityStore FMcpCapabilityStore::FromShards()
 		}
 	}
 
-	if (Loaded.Num() != McpGeneratedCapabilityShards::TotalRecordCount())
+	const int32 Declared = McpGeneratedCapabilityShards::TotalRecordCount() + McpExtensionCapabilityShards::TotalRecordCount();
+	if (Loaded.Num() != Declared)
 	{
 		Store.Status = EMcpCapabilityStoreStatus::RecordCountMismatch;
 		Store.StatusDetail = FString::Printf(
-			TEXT("loaded %d records but the generated index declares %d"),
-			Loaded.Num(), McpGeneratedCapabilityShards::TotalRecordCount());
+			TEXT("loaded %d records but the generated and extension indexes declare %d"), Loaded.Num(), Declared);
 		return Store;
 	}
 
 	Loaded.Sort([](const FMcpCapabilityRecord& L, const FMcpCapabilityRecord& R)
 		{ return L.Id.Compare(R.Id, ESearchCase::CaseSensitive) < 0; });
 	Store.Records = MoveTemp(Loaded);
-	Store.CatalogRevision = McpGeneratedCapabilityShards::CatalogRevision();
+	Store.CatalogRevision = McpExtensionCapabilityShards::CatalogRevision();
 	Store.Status = EMcpCapabilityStoreStatus::Ready;
 	return Store;
 }

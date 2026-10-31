@@ -1,5 +1,5 @@
 #include "MCP/DynamicTools/McpDynamicToolManager.h"
-#include "MCP/Generated/McpGeneratedCapabilityShards.h"
+#include "MCP/Extensions/McpExtensionCapabilityShards.h"
 
 TSharedPtr<FJsonObject> FMcpDynamicToolManager::ListTools()
 {
@@ -69,7 +69,7 @@ TSharedPtr<FJsonObject> FMcpDynamicToolManager::GetStatus()
 	Result->SetNumberField(TEXT("totalTools"), ToolStates.Num());
 	Result->SetNumberField(TEXT("enabledTools"), EnabledCount);
 	Result->SetNumberField(TEXT("disabledTools"), ToolStates.Num() - EnabledCount);
-	Result->SetStringField(TEXT("catalogRevision"), McpGeneratedCapabilityShards::CatalogRevision());
+	Result->SetStringField(TEXT("catalogRevision"), McpExtensionCapabilityShards::CatalogRevision());
 	Result->SetNumberField(TEXT("catalogStateRevision"), static_cast<double>(CatalogStateRevision));
 
 	Result->SetArrayField(TEXT("categories"), DescribeCategories_NoLock());
