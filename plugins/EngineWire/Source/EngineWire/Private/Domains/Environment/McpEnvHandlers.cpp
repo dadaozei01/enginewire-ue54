@@ -1,4 +1,7 @@
 #include "Domains/Environment/McpEnvShared.h"
+#include "Domains/Environment/Modules/McpModuleKit.h"
+#include "Domains/Environment/Roads/McpRoadPlan.h"
+#include "Domains/Landscape/Erosion/McpTerrainErosion.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogMcpEnvironmentHandlers, Log, All);
 
@@ -168,6 +171,18 @@ bool UEngineWireSubsystem::HandleBuildEnvironmentAction(
     {
         return HandleSculptLandscape(RequestId, TEXT("sculpt_landscape"), Payload,
                                      RequestingSocket);
+    }
+    else if (LowerSub == TEXT("assemble_modules"))
+    {
+        return McpModuleAssembly::HandleAssembleModules(*this, RequestId, Payload, RequestingSocket);
+    }
+    else if (LowerSub == TEXT("plan_road"))
+    {
+        return McpRoadPlanning::HandlePlanRoad(*this, RequestId, Payload, RequestingSocket);
+    }
+    else if (LowerSub == TEXT("erode_landscape"))
+    {
+        return McpLandscapeErosion::HandleErodeLandscape(*this, RequestId, Payload, RequestingSocket);
     }
     else if (LowerSub == TEXT("modify_heightmap"))
     {

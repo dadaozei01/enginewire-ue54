@@ -1,5 +1,6 @@
 #include "Core/Security/McpPrequeueGate.h"
 
+#include "Core/Security/McpConsentLedger.h"
 #include "Domains/ConsoleCommand/McpConsolePrivate.h"
 #include "Foundation/McpPrincipalQuota.h"
 #include "Misc/App.h"
@@ -14,7 +15,7 @@ namespace
 // Bounds mirror the payload path scan: a hostile client cannot make the gate
 // walk an unbounded structure before its request is even queued.
 constexpr int32 MaxScanDepth = 24;
-constexpr int32 MaxScanNodes = 4096;
+constexpr int32 MaxScanNodes = McpMaxPayloadScanNodes;
 
 FMcpAuthorizationGrant ReadGrant(const TSharedPtr<FJsonObject>& Consent)
 {
@@ -84,15 +85,15 @@ bool ScanForBlockedCommand(
 	}
 	--State.NodeBudget;
 
-	const FString LowerKey = Key.ToLower();
 	// Every key the executors actually read. `cmd` is the per-entry key a console
 	// batch accepts, so omitting it here let a blocked command
 	// wrapped as {"commands":[{"cmd":"..."}]} pass the PRE-queue gate and consume
 	// editor-thread work. The post-queue check still refused execution, so this
 	// closes a defence-in-depth gap rather than an execution hole -- but the gate
-	// exists precisely so such a request never reaches the queue.
-	const bool bCommandKey = LowerKey == TEXT("command") || LowerKey == TEXT("commands")
-		|| LowerKey == TEXT("cmd");
+	// exists precisely so such a request never reaches the queue. (Compared in place:
+	// a lowered copy per value was an allocation for every node of a large batch.)
+	const bool bCommandKey = Key.Equals(TEXT("command"), ESearchCase::IgnoreCase)
+		|| Key.Equals(TEXT("commands"), ESearchCase::IgnoreCase) || Key.Equals(TEXT("cmd"), ESearchCase::IgnoreCase);
 
 	if (Value->Type == EJson::String)
 	{
@@ -225,14 +226,25 @@ FMcpAuthorizationDecision AuthorizeWithDemand(
 	// the quota charge. Two consequences are deliberate: a replay is rejected
 	// before it can spend the principal's budget, and a quota-exceeded call has
 	// already consumed its grant, so it needs a fresh one (re-run describe) once
-	// the window rolls. Grants without a nonce (older clients, the TypeScript
-	// surface) skip the ledger entirely.
-	if (Grant.bConsentPresent && !Grant.ConsentNonce.IsEmpty())
+	// the window rolls. On native /mcp the nonce must be one describe (or the
+	// consent ask) minted for this capability; a made-up nonce was taken as fresh
+	// and a missing one as legacy. The WebSocket door skips a grant without one.
+	if (Grant.bConsentPresent && (Request.bRequireIssuedNonce || !Grant.ConsentNonce.IsEmpty()))
 	{
-		if (!McpCapabilityAuthorization::FMcpConsentLedger::Get().TryConsume(Grant.ConsentNonce))
+		using McpCapabilityAuthorization::EMcpConsentNonce;
+		const EMcpConsentNonce Nonce = McpCapabilityAuthorization::FMcpConsentLedger::Get().Consume(
+			Grant.ConsentNonce, Demand.CapabilityId, Request.bRequireIssuedNonce);
+		if (Nonce == EMcpConsentNonce::Reused)
 		{
 			return FMcpAuthorizationDecision::Deny(McpAuthorizationCodes::ConsentReused,
 				TEXT("This consent grant was already used by an earlier call. Consent grants are single-use: re-run describe for a fresh grant and retry."));
+		}
+		if (Nonce == EMcpConsentNonce::NotIssued)
+		{
+			FMcpAuthorizationDecision NotIssued = FMcpAuthorizationDecision::Deny(McpAuthorizationCodes::ConsentNotIssued,
+				TEXT("This consent grant's nonce was not minted by describe for this capability (missing, made up, or too old). Run describe for the capability and send its consentGrant back unchanged, nonce included."));
+			NotIssued.ConsentScope = Demand.ConsentMode;
+			return NotIssued;
 		}
 		// Remember what this request burned. The handler runs later and may
 		// refuse without touching anything, and charging a single-use grant for
@@ -250,6 +262,7 @@ FMcpAuthorizationDecision AuthorizeWithDemand(
 		Quota.bRetryable = true;
 		return Quota;
 	}
+	RememberRequestPrincipal(Request.RequestId, Principal);
 	return FMcpAuthorizationDecision::Allow();
 }
 
@@ -279,6 +292,15 @@ FMcpAuthorizationDecision Authorize(const FMcpPrequeueRequest& Request)
 	const FMcpAuthorizationDecision Bound = RequirePrincipal(Request);
 	if (!Bound.bAllowed) return Bound;
 	return AuthorizeWithDemand(Request, ResolveDemand(Request));
+}
+
+FMcpAuthorizationDecision AuthorizeStep(const FMcpPrequeueRequest& Request)
+{
+	const FMcpAuthorizationDecision Bound = RequirePrincipal(Request);
+	if (!Bound.bAllowed) return Bound;
+	FMcpCapabilityDemand Demand = ResolveDemand(Request);
+	Demand.ConsentMode = TEXT("none");
+	return AuthorizeWithDemand(Request, Demand);
 }
 
 FMcpAuthorizationDecision AuthorizeRead(const FMcpPrequeueRequest& Request)

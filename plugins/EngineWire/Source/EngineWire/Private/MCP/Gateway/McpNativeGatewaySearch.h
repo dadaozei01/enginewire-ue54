@@ -25,17 +25,26 @@ struct FMcpDiscoveryQuery
 	FString Family;
 	FString Tool;
 	FString Action;
+	FString Capability;
 	FString Param;
 	FString Effect;
-	bool bHasDomain = false;
+	bool bHasDomain = false; // search filters by it; describe browses it
 	bool bHasFamily = false;
-	bool bHasTool = false; // search only: filter by parent tool, as the TS gateway does
+	bool bHasTool = false;
 	bool bHasEffect = false;
 	bool bHasAction = false;
+	bool bHasCapability = false; // search only: describe resolves the id to its tool and action first
 	bool bHasParam = false;
+	bool bHasLimit = false; // describe pages a listing at Limit only when the caller sent one
+	FString Cursor; // search: a nextCursor sent back, which supersedes Offset
+	bool bHasCursor = false;
 	int32 Limit = 12;
 	int32 Offset = 0;
 	int32 MaxBytes = 0; // 0 -> McpMaxResultBytes; the schema accepted maxBytes but native ignored it (dogfood #3)
+	/** search: the caller may read project data (Read scope or Admin), so saved recipes are listed as list_recipes would. */
+	bool bMayReadProject = false;
+	/** search: each sent integer that was clamped, {parameter, requested, applied, reason} as in gateway-shared.ts. */
+	TArray<TSharedPtr<FJsonValue>> Coercions;
 };
 
 /** Search default/maximum budgets, shared with the gateway tool schema. */
@@ -77,7 +86,13 @@ constexpr int32 McpSearchPhraseTopicBonus = 50;
 constexpr int32 McpSearchReadIntentBonus = 40;
 /** The same for a query that opens with a delete word and a record whose effect is destructive. */
 constexpr int32 McpSearchDeleteIntentBonus = 40;
-constexpr int32 McpDescribeDefaultLimit = 20;
+/**
+ * A first hit whose runner-up scores at most this percentage of it, and that needs no consent, carries its signature
+ * and execute call so a caller can skip describe (SEARCH_CONFIDENT_RATIO_PERCENT in gateway-search.ts; measured by
+ * tests/eval/confident-hit.test.ts).
+ */
+constexpr int32 McpSearchConfidentRatioPercent = 90;
+/** A describe page's ceiling, and a browse level's page when no limit is sent (MAX_DESCRIBE_LIMIT, DEFAULT_BROWSE_LIMIT). */
 constexpr int32 McpDescribeMaxLimit = 50;
 // Search result byte budget (24 KB); a page that would pass it is cut short and
 // reported as truncated by "byte-budget".

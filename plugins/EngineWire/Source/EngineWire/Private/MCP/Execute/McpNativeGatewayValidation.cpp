@@ -9,6 +9,7 @@
 #include "MCP/Execute/McpNativeGatewayExecuteRequest.h"
 #include "MCP/Execute/McpNativeGatewayReceipt.h"
 #include "MCP/Execute/McpNativeGatewaySchemaValidation.h"
+#include "MCP/Execute/Request/McpFoldVariantRules.h"
 #include "MCP/DynamicTools/McpDynamicToolManager.h"
 #include "MCP/Registry/McpToolDefinition.h"
 #include "MCP/Registry/McpToolRegistry.h"
@@ -33,33 +34,6 @@ bool IsCatalogRevisionDigest(const FString& Value)
 		}
 	}
 	return true;
-}
-
-// The parameters a call sent (the caller's names, before defaults) that only other variants of its
-// folded family read. The family declares them, so the call is accepted, and the variant that ran ignored
-// them without a word: inspect_graph info=node with pinName answered every pin. One receipt warning each
-// (mirror of unreadVariantParams in gateway-dispatch-by.ts).
-TArray<FString> McpUnreadVariantParams(
-	const FMcpCapabilityRecord& Record, const TArray<FString>& Sent, const TSharedPtr<FJsonObject>& Params)
-{
-	TArray<FString> Out;
-	FString Selected;
-	if (Record.DispatchByDeclaredBy.Num() == 0 || !Params.IsValid() ||
-		!Params->TryGetStringField(Record.DispatchBySelector, Selected))
-	{
-		return Out;
-	}
-	for (const FString& Name : Sent)
-	{
-		const TArray<FString>* Owners = Record.DispatchByDeclaredBy.Find(Name);
-		if (Owners && !Owners->Contains(Selected))
-		{
-			Out.Add(FString::Printf(TEXT("%s is read only when %s is %s; this %s=%s call did not use it."),
-				*Name, *Record.DispatchBySelector, *FString::Join(*Owners, TEXT(" or ")),
-				*Record.DispatchBySelector, *Selected));
-		}
-	}
-	return Out;
 }
 }
 
@@ -160,15 +134,21 @@ TSharedPtr<FJsonObject> ValidateAndResolveGatewayExecute(
 		ToValidate->SetStringField(TEXT("action"), LegacyAction);
 	}
 
+	// A folded family's union schema keeps only what every variant requires; the variant that will
+	// run is held to its own record's requirements as well (mirror of gateway-execute-static-check.ts).
 	FMcpSchemaViolationDetail Violation;
-	if (!McpValidateObjectAgainstCanonicalSchema(ToValidate, InputSchema, Violation))
+	if (!McpValidateObjectAgainstCanonicalSchema(ToValidate, InputSchema, Violation)
+		|| !McpCheckVariantRequirements(*Request.Record,
+			McpResolveDispatchAction(*Request.Record, RequestedAction, WithDefaults, LegacyAction), WithDefaults, Violation))
 	{
 		const FString Code = McpSchemaViolationCode(Violation.Reason);
+		// The wording and guidance of validateInput in gateway-execute-static-check.ts.
+		const FString Message = FString::Printf(TEXT("%s for %s. Call describe before execution."), *Violation.Message, *Request.CapabilityId);
 		FMcpSemanticError SchemaError = Violation.Reason == EMcpSchemaViolation::Range
-			? McpRangeError(Violation.Pointer, Violation.Message)
-			: McpValidationError(Code, Violation.Message, Violation.Pointer);
+			? McpRangeError(Violation.Pointer, Message)
+			: McpValidationError(Code, Message, Violation.Pointer);
 		return McpBuildErrorReceipt(Request.CapabilityId, SchemaError, Context,
-			GatewaySchemaGuidance(ParentTool, LegacyAction, Violation.Pointer));
+			GatewaySchemaViolationGuidance(ParentTool, LegacyAction, Violation.Pointer, InputSchema));
 	}
 
 	// Editor-state gate (dogfood #91): a capability whose editorStates exclude

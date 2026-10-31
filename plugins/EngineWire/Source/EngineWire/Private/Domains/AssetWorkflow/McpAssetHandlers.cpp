@@ -5,6 +5,7 @@
 #include "Dom/JsonObject.h"
 #include "MCP/Routing/McpConsolidatedActionRouting.h"
 #include "Domains/AssetQuery/McpAssetQueryPrivate.h"
+#include "Domains/AssetWorkflow/Analysis/McpAssetDiff.h"
 #include "Domains/AssetWorkflow/Materials/McpAssetMeshMats.h"
 #include "Domains/AssetWorkflow/Rename/McpAssetRenameGuard.h"
 
@@ -121,6 +122,8 @@ bool UEngineWireSubsystem::HandleAssetAction(
     return HandleListAssets(RequestId, Payload, RequestingSocket);
   if (Lower == TEXT("generate_report"))
     return HandleGenerateReport(RequestId, Payload, RequestingSocket);
+  if (Lower == TEXT("diff_asset"))
+    return McpAssetDiff::HandleDiffAsset(this, RequestId, Payload, RequestingSocket);
   if (Lower == TEXT("create_thumbnail") || Lower == TEXT("generate_thumbnail"))
     return HandleGenerateThumbnail(RequestId, Lower, Payload, RequestingSocket);
   if (Lower == TEXT("add_material_parameter"))
@@ -139,6 +142,12 @@ bool UEngineWireSubsystem::HandleAssetAction(
     return McpAssetQueryHandlers::HandleSearchAssets(this, RequestId, Payload, RequestingSocket);
   if (Lower == TEXT("find_text"))
     return McpAssetQueryHandlers::HandleFindText(this, RequestId, Payload, RequestingSocket);
+  if (Lower == TEXT("thumbnail_sheet"))
+    return McpAssetQueryHandlers::HandleThumbnailSheet(this, RequestId, Payload, RequestingSocket);
+  if (Lower == TEXT("caption_assets"))
+    return McpAssetQueryHandlers::HandleCaptionAssets(this, RequestId, Payload, RequestingSocket);
+  if (Lower == TEXT("find_assets_like"))
+    return McpAssetQueryHandlers::HandleFindAssetsLike(this, RequestId, Payload, RequestingSocket);
 
   // Bulk Operations
   if (Lower == TEXT("fixup_redirectors"))

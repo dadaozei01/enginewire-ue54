@@ -36,6 +36,13 @@
 - 资产改名：单个用 asset.rename；多个各自不同的新名字用 manage_asset maintain_content（maintenance=bulk_rename）的 renames 列表一次完成，改完 list 读回。改名会留下重定向器，需要清理时用 maintenance=fixup_redirectors。
 - 重命名当前打开的关卡后，编辑器会切到 /Temp/Untitled_N 临时世界（Windows 实测），需提醒用户重新打开改名后的关卡。
 
+## 先找已有能力
+
+- 判断"没有这个能力"或改用 Python 自写前，换 2–3 组动词和对象再 search，或按 domain 过滤，或 describe 不带选择器逐层浏览。只搜一次就下结论容易漏。
+- 动态效果验证先用：control_editor 的 step_frame（暂停后逐帧推进）、control_actor 的 sample_motion（按游戏时间采样位置、速度和指定属性，可定时模拟按键）、screenshot、inspect 的 describe_view 与 capture_passes。不在用户编辑器里挂临时 tick 回调。
+- 改蓝图逻辑先用 manage_blueprint 的 read_graph_as_code 读成文本，改完用 write_graph_from_code 写回（Epic 5.8 蓝图 DSL 文本格式，0.6.0 起），少用逐节点建线；改完 compile 并检查无用节点。本仓库已修复中文界面、多输出函数、运算节点等读写问题（UPSTREAM.md 第 8–15 项）；写回时保留读出的 `; id` 注释，菜单里没有的节点（如 SpawnActor<蓝图类>）靠它复用原节点，去掉注释会被整体拒绝。写入失败会整体拒绝，不会写坏蓝图。
+- Niagara：create_effect 建拖尾后读回 SpawnRate.SpawnRate，若为 0 用 set_parameter_value 重设；跟随拖尾（LocationBasedRibbon）的发射器静止且粒子无速度时长度为 0、看不到。看特效以 PIE 画面为准，截图回执里"视口不是实时"的提示在 PIE 下也会出现。用户开着某资产的 Niagara 编辑器时，其副本保存会覆盖 MCP 写入。
+
 ## 故障定位
 
-MCP off：检查开关、重启及 UE 日志。401/403：检查工程身份、动态令牌和请求头。连接拒绝：确认端口和运行进程。工具不存在：重载 Agent 配置，确认使用匹配的 0.6 beta 客户端/代理。不要输出令牌排错。
+MCP off：检查开关、重启及 UE 日志。401/403：检查工程身份、动态令牌和请求头。连接拒绝：确认端口和运行进程。工具不存在：重载 Agent 配置，确认使用匹配的 0.6 客户端/代理。不要输出令牌排错。

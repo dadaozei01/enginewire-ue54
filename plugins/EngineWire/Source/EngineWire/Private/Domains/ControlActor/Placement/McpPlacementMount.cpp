@@ -2,6 +2,7 @@
 
 #include "Domains/ControlActor/Placement/McpPlacementMount.h"
 
+#include "Components/PrimitiveComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
@@ -30,9 +31,47 @@ bool IsBoundsOnlyActor(const AActor *Actor) {
          ClassName.EndsWith(TEXT("SubsystemRenderingActor"));
 }
 
-AActor *FindMount(UWorld *World, AActor *Actor, const FBox &ActorBox, const double Touch) {
-  const FBox Reach = ActorBox.ExpandBy(Touch);
+namespace {
+bool IsDrawnPart(const UPrimitiveComponent *Part) {
+  return Part->IsRegistered() && Part->IsVisible() && !Part->bHiddenInGame && !Part->IsEditorOnly();
+}
+} // namespace
+
+FBox DrawnBounds(const AActor &Actor) {
+  FBox Box(ForceInit);
+  TInlineComponentArray<UPrimitiveComponent *> Parts(&Actor);
+  for (const UPrimitiveComponent *Part : Parts) {
+    if (IsDrawnPart(Part)) {
+      Box += Part->Bounds.GetBox();
+    }
+  }
+  return Box.IsValid ? Box : Actor.GetComponentsBoundingBox(true);
+}
+
+FBox DrawnBoundsIn(const AActor &Actor, const FTransform &Frame) {
+  FBox Box(ForceInit);
+  TInlineComponentArray<UPrimitiveComponent *> Parts(&Actor);
+  for (const UPrimitiveComponent *Part : Parts) {
+    if (IsDrawnPart(Part)) {
+      Box += Part->CalcBounds(Part->GetComponentTransform().GetRelativeTransform(Frame)).GetBox();
+    }
+  }
+  return Box;
+}
+
+bool HangsOn(const FBox &ActorBox, const FBox &OtherBox, const double Touch) {
+  const FBox Shared = ActorBox.ExpandBy(Touch).Overlap(OtherBox);
+  if (OtherBox.GetExtent().GetMin() <= 1.0 || !Shared.IsValid) {
+    return false;
+  }
   const FVector Own = ActorBox.GetSize();
+  const FVector Size = Shared.GetSize();
+  const bool bAcrossX = Size.X <= Size.Y;
+  const double Depth = bAcrossX ? Size.X : Size.Y;
+  return Depth < Size.Z && Depth <= FMath::Max(2.0 * Touch, 0.25 * (bAcrossX ? Own.X : Own.Y));
+}
+
+AActor *FindMount(UWorld *World, AActor *Actor, const FBox &ActorBox, const double Touch) {
   for (TActorIterator<AActor> It(World); It; ++It) {
     AActor *Other = *It;
     if (!Other || Other == Actor || Other->IsHidden() || IsBoundsOnlyActor(Other)) {
@@ -41,14 +80,7 @@ AActor *FindMount(UWorld *World, AActor *Actor, const FBox &ActorBox, const doub
     FVector Origin = FVector::ZeroVector;
     FVector Extent = FVector::ZeroVector;
     Other->GetActorBounds(true, Origin, Extent);
-    const FBox Shared = Reach.Overlap(FBox::BuildAABB(Origin, Extent));
-    if (Extent.GetMin() <= 1.0 || !Shared.IsValid) {
-      continue;
-    }
-    const FVector Size = Shared.GetSize();
-    const bool bAcrossX = Size.X <= Size.Y;
-    const double Depth = bAcrossX ? Size.X : Size.Y;
-    if (Depth < Size.Z && Depth <= FMath::Max(2.0 * Touch, 0.25 * (bAcrossX ? Own.X : Own.Y))) {
+    if (HangsOn(ActorBox, FBox::BuildAABB(Origin, Extent), Touch)) {
       return Other;
     }
   }

@@ -1,5 +1,8 @@
 #include "Domains/ControlEditor/McpEditorSupport.h"
+#include "Domains/ControlEditor/Checkpoint/McpEditorCheckpoint.h"
 #include "Domains/ControlEditor/Toolsets/McpEditorToolsets.h"
+#include "Domains/Play/McpExplore.h"
+#include "Domains/Play/McpPlaytest.h"
 
 bool UEngineWireSubsystem::HandleControlEditorAction(
     const FString &RequestId, const FString &Action,
@@ -32,6 +35,10 @@ bool UEngineWireSubsystem::HandleControlEditorAction(
     return HandleControlEditorPlay(RequestId, Payload, RequestingSocket);
   if (LowerSub == TEXT("stop") || LowerSub == TEXT("stop_pie"))
     return HandleControlEditorStop(RequestId, Payload, RequestingSocket);
+  if (LowerSub == TEXT("playtest"))
+    return McpPlaytest::Handle(*this, RequestId, Payload, RequestingSocket);
+  if (LowerSub == TEXT("explore_level"))
+    return McpExplore::Handle(*this, RequestId, Payload, RequestingSocket);
   if (LowerSub == TEXT("eject"))
     return HandleControlEditorEject(RequestId, Payload, RequestingSocket);
   if (LowerSub == TEXT("possess"))
@@ -101,6 +108,8 @@ bool UEngineWireSubsystem::HandleControlEditorAction(
     return HandleControlEditorUndo(RequestId, Payload, RequestingSocket);
   if (LowerSub == TEXT("redo"))
     return HandleControlEditorRedo(RequestId, Payload, RequestingSocket);
+  if (LowerSub == TEXT("restore_point"))
+    return McpEditorCheckpoint::Handle(this, RequestId, Payload, RequestingSocket);
   if (LowerSub == TEXT("set_editor_mode"))
     return HandleControlEditorSetEditorMode(RequestId, Payload, RequestingSocket);
   if (LowerSub == TEXT("show_stats"))

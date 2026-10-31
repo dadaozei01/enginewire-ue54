@@ -3,6 +3,7 @@
 #include "Domains/Render/McpRenderSupportSettings.h"
 
 #include "EngineWireSubsystem.h"
+#include "Modules/ModuleManager.h"
 
 namespace McpRenderHandlers
 {
@@ -83,23 +84,64 @@ void ApplyNumberSetting(
     }
 }
 
+// The denoisers this editor has, by the name each plugin registers its denoiser under (the module is the plugin's name;
+// both are the same in 5.5-5.8).
+// ponytail: a loaded module, not proof its denoiser registered (NNEDenoiser and NFOR register only when their runtime and
+// settings allow, and the renderer offers no query by name in any 5.x); read the registry if that gap ever matters.
+TArray<FString> RenderLoadedDenoisers()
+{
+    static const TCHAR* const Plugins[][2] = {{TEXT("NNEDenoiser"), TEXT("NNEDenoiser")}, {TEXT("OpenImageDenoise"), TEXT("OIDN")},
+                                              {TEXT("OptiXDenoise"), TEXT("OptiX")}, {TEXT("NFORDenoise"), TEXT("NFOR")}};
+    TArray<FString> Out;
+    for (const auto& Plugin : Plugins)
+    {
+        if (FModuleManager::Get().IsModuleLoaded(Plugin[0]))
+        {
+            Out.Add(Plugin[1]);
+        }
+    }
+    return Out;
+}
+
 void SendConsoleResult(
     UEngineWireSubsystem* Subsystem,
     const FString& RequestId,
     const FString& SubAction,
     TArray<FString>& Applied,
     TArray<FString>& Unsupported,
-    TSharedPtr<FMcpBridgeWebSocket> Socket)
+    TSharedPtr<FMcpBridgeWebSocket> Socket,
+    const TArray<FString>* Denoisers = nullptr)
 {
+    // Nothing taking answered success ("settings not available"), so a missing variable read as configured.
+    if (Applied.Num() == 0)
+    {
+        Subsystem->SendAutomationError(Socket, RequestId, FString::Printf(TEXT("Settings not available: no console variable took: %s. "
+            "Nothing was changed."), *FString::Join(Unsupported, TEXT("; "))), TEXT("CVAR_UNAVAILABLE"));
+        return;
+    }
     TSharedPtr<FJsonObject> Result = MakeRenderResult(SubAction);
-    Result->SetBoolField(TEXT("supported"), Applied.Num() > 0);
+    Result->SetBoolField(TEXT("supported"), true);
     AddStringArray(Result, TEXT("appliedCVars"), Applied);
     AddStringArray(Result, TEXT("unsupportedCVars"), Unsupported);
-    Subsystem->SendAutomationResponse(
-        Socket,
-        RequestId,
-        true,
-        Applied.Num() > 0 ? TEXT("Render console settings applied.") : TEXT("Render console settings not available."),
+    if (Denoisers)
+    {
+        AddStringArray(Result, TEXT("denoisers"), *Denoisers);
+    }
+    // r.RayTracing is fixed at startup: with it off, every ray-traced setting is stored and draws nothing.
+    const IConsoleVariable* RayTracing = IConsoleManager::Get().FindConsoleVariable(TEXT("r.RayTracing"));
+    const bool bRayTracing = RayTracing && RayTracing->GetInt() != 0;
+    Result->SetBoolField(TEXT("rayTracingEnabled"), bRayTracing);
+    if (!bRayTracing)
+    {
+        TArray<TSharedPtr<FJsonValue>> Warnings;
+        Warnings.Add(MakeShared<FJsonValueString>(TEXT("Hardware ray tracing is off for this project (r.RayTracing 0): these settings "
+            "are stored but draw nothing until Support Hardware Ray Tracing is on (Project Settings > Rendering), the editor "
+            "restarts, and the GPU supports it.")));
+        Result->SetArrayField(TEXT("warnings"), Warnings);
+    }
+    Subsystem->SendAutomationResponse(Socket, RequestId, true,
+        FString::Printf(TEXT("Set %s%s"), *FString::Join(Applied, TEXT(", ")),
+                        Unsupported.Num() > 0 ? *(TEXT("; not set: ") + FString::Join(Unsupported, TEXT("; "))) : TEXT("")),
         Result);
 }
 }
@@ -140,7 +182,8 @@ bool HandleRenderConsoleAction(
             {false, TEXT("Radius"), 0.0, 10000.0, false, TEXT("r.RayTracing.AmbientOcclusion.Radius")}}}},
         {TEXT("configure_path_tracing"), {TEXT("r.PathTracing"), {
             {false, TEXT("SamplesPerPixel"), 1.0, 256.0, true, TEXT("r.PathTracing.SamplesPerPixel")},
-            {false, TEXT("MaxBounces"), 0.0, 16.0, true, TEXT("r.PathTracing.MaxBounces")}}}},
+            {false, TEXT("MaxBounces"), 0.0, 16.0, true, TEXT("r.PathTracing.MaxBounces")},
+            {false, TEXT("Denoiser"), 0.0, 1.0, true, TEXT("r.PathTracing.Denoiser")}}}},
     };
     const FConsoleAction* ConsoleAction = Actions.Find(SubAction);
     if (!ConsoleAction)
@@ -149,6 +192,48 @@ bool HandleRenderConsoleAction(
     }
 
     const TSharedPtr<FJsonObject> Settings = GetSettingsObject(Payload);
+    const bool bPathTracing = SubAction == TEXT("configure_path_tracing");
+    // A settings key the action does not read was dropped without a word, so {"Samples": 8} answered applied.
+    TArray<FString> Known;
+    for (const FNumberCVar& Number : ConsoleAction->Numbers)
+    {
+        if (!Number.bTopLevel)
+        {
+            Known.Add(Number.Field);
+        }
+    }
+    if (bPathTracing)
+    {
+        Known.Add(TEXT("DenoiserName"));
+    }
+    TArray<FString> Unknown;
+    if (Settings.IsValid())
+    {
+        for (const TPair<FString, TSharedPtr<FJsonValue>> Pair : Settings->Values)
+        {
+            if (!Known.ContainsByPredicate([&Pair](const FString& Field) { return Field.Equals(Pair.Key, ESearchCase::IgnoreCase); }))
+            {
+                Unknown.Add(Pair.Key);
+            }
+        }
+    }
+    if (Unknown.Num() > 0)
+    {
+        Subsystem->SendAutomationError(RequestingSocket, RequestId, FString::Printf(TEXT("%s does not read settings %s; it reads %s. "
+            "Nothing was changed."), *SubAction, *FString::Join(Unknown, TEXT(", ")), *FString::Join(Known, TEXT(", "))),
+            TEXT("INVALID_ARGUMENT"));
+        return true;
+    }
+    // An unknown name makes the renderer use whichever denoiser it has, so only one a loaded plugin registers is taken.
+    const TArray<FString> Denoisers = RenderLoadedDenoisers();
+    FString DenoiserName;
+    if (bPathTracing && Settings.IsValid() && Settings->TryGetStringField(TEXT("DenoiserName"), DenoiserName) && !Denoisers.Contains(DenoiserName))
+    {
+        Subsystem->SendAutomationError(RequestingSocket, RequestId, FString::Printf(TEXT("DenoiserName '%s' is not a denoiser this editor "
+            "has loaded (%s). Nothing was changed."), *DenoiserName, Denoisers.Num() > 0 ? *FString::Join(Denoisers, TEXT(", ")) : TEXT("none")),
+            TEXT("INVALID_ARGUMENT"));
+        return true;
+    }
     TArray<FBoundedConsoleSetting> Values;
     for (const FNumberCVar& Number : ConsoleAction->Numbers)
     {
@@ -165,7 +250,11 @@ bool HandleRenderConsoleAction(
     {
         ApplyNumberSetting(Values[Index], ConsoleAction->Numbers[Index].CVar, Applied, Unsupported);
     }
-    SendConsoleResult(Subsystem, RequestId, SubAction, Applied, Unsupported, RequestingSocket);
+    if (!DenoiserName.IsEmpty())
+    {
+        SetConsoleVariable(TEXT("r.PathTracing.Denoiser.Name"), DenoiserName, Applied, Unsupported);
+    }
+    SendConsoleResult(Subsystem, RequestId, SubAction, Applied, Unsupported, RequestingSocket, bPathTracing ? &Denoisers : nullptr);
     return true;
 }
 }

@@ -51,6 +51,8 @@ bool UEngineWireSubsystem::HandleLevelAction(
       EffectiveAction = TEXT("set_level_world_settings");
     } else if (LowerSub == TEXT("validate_level")) {
       EffectiveAction = TEXT("validate_level");
+    } else if (LowerSub == TEXT("run_map_check")) {
+      EffectiveAction = TEXT("run_map_check");
     } else if (LowerSub == TEXT("list") || LowerSub == TEXT("list_levels")) {
       EffectiveAction = TEXT("list_levels");
     } else if (LowerSub == TEXT("get_current_level")) {
@@ -61,6 +63,8 @@ bool UEngineWireSubsystem::HandleLevelAction(
       EffectiveAction = TEXT("import_level");
     } else if (LowerSub == TEXT("add_sublevel")) {
       EffectiveAction = TEXT("add_sublevel");
+    } else if (LowerSub == TEXT("remove_sublevel")) {
+      EffectiveAction = TEXT("remove_sublevel");
     } else if (LowerSub == TEXT("delete") || LowerSub == TEXT("delete_level")) {
       EffectiveAction = TEXT("delete_level");
     } else if (LowerSub == TEXT("rename") || LowerSub == TEXT("rename_level")) {
@@ -91,12 +95,14 @@ bool UEngineWireSubsystem::HandleLevelAction(
       {TEXT("save_level_as"), McpLevelHandlers::HandleSaveLevelAsAction},
       {TEXT("set_metadata"), McpLevelHandlers::HandleSetMetadataAction},
       {TEXT("validate_level"), McpLevelHandlers::HandleValidateLevelAction},
+      {TEXT("run_map_check"), McpLevelHandlers::HandleRunMapCheckAction},
       {TEXT("create_new_level"), McpLevelHandlers::HandleCreateNewLevelAction},
       {TEXT("spawn_light"), McpLevelHandlers::HandleSpawnLightAction},
       {TEXT("list_levels"), McpLevelHandlers::HandleListLevelsAction},
       {TEXT("export_level"), McpLevelHandlers::HandleExportLevelAction},
       {TEXT("import_level"), McpLevelHandlers::HandleImportLevelAction},
       {TEXT("add_sublevel"), McpLevelHandlers::HandleAddSublevelAction},
+      {TEXT("remove_sublevel"), McpLevelHandlers::HandleRemoveSublevelAction},
       {TEXT("delete_level"), McpLevelHandlers::HandleDeleteLevelAction},
       {TEXT("rename_level"), McpLevelHandlers::HandleRenameLevelAction},
       {TEXT("duplicate_level"), McpLevelHandlers::HandleDuplicateLevelAction},

@@ -37,6 +37,10 @@ struct FMcpPrequeueRequest
 	// never trusts the TypeScript layer to have checked it.
 	TSharedPtr<FJsonObject> Consent;
 
+	// Set by native /mcp, whose describe mints every grant's nonce: a grant's nonce must be one the ledger issued for
+	// CapabilityId (Core/Security/McpConsentLedger.h). The WebSocket door has no describe and leaves it false.
+	bool bRequireIssuedNonce = false;
+
 	// False for a discovery request (native resources/*, prompts/*, tools/list),
 	// which consumes the principal's request budget but not its tool-call budget.
 	// This is what makes MaxRequestsPerMinute and MaxToolCallsPerMinute distinct
@@ -70,6 +74,17 @@ void ForgetConsentForRequest(const FString& RequestId);
 // then quota. Quota is charged last so a request refused on authorization does
 // not consume the principal's budget.
 FMcpAuthorizationDecision Authorize(const FMcpPrequeueRequest& Request);
+
+// A step a request runs in-process (system_control run_script): the same gate for the caller's principal, without
+// consent, which the script's own grant covers for the capabilities it listed (the caller checks the list). Burns no
+// nonce and records nothing, so RequestId stays empty.
+FMcpAuthorizationDecision AuthorizeStep(const FMcpPrequeueRequest& Request);
+
+// The principal Authorize allowed a request for, kept from the gate until its reply (McpRequestPrincipals.cpp), so
+// what the request runs in-process is authorized for the same caller. False for a request never authorized.
+void RememberRequestPrincipal(const FString& RequestId, const FMcpCapabilityPrincipal& Principal);
+bool FindRequestPrincipal(const FString& RequestId, FMcpCapabilityPrincipal& OutPrincipal);
+void ForgetRequestPrincipal(const FString& RequestId);
 
 // The BOUNDED telemetry action class for a dispatch action, resolved
 // from the same catalogue demand the gate uses, so "how dangerous was it" is

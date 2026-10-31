@@ -1,7 +1,9 @@
 # 来源、改动与验证
 
 上游：https://github.com/ChiR24/Unreal_mcp
-固定版本：v0.6.0-beta-f，MIT 许可证。非官方构建。
+固定版本：v0.6.0（2026-10-27 正式版；此前为 v0.6.0-beta-f），MIT 许可证。非官方构建。
+
+升级到 v0.6.0 时逐条核对下列修改：第 1、6 项上游已自带同等 include，第 2 项上游改用 5.3 起可用的 Builder.FindNodeOutputs 重写了别名重试，三者不再另行修改；第 3、4、5、7 项上游仍需要，已重新应用。
 
 UE 5.4 修改：
 
@@ -28,5 +30,20 @@ Mac 编译修改（新版 Apple clang 下才暴露，不影响 Windows）：
 2026-10-23 Mac 构建环境：Apple Silicon，UE 5.4.4，Xcode 27.0（本机 Apple_SDK.json 的 MaxVersion 调到 27.9.0）。RunUAT BuildPlugin -TargetPlatforms=Mac 成功，EngineWire、EngineWireFab 为 Universal dylib，BuildId 33043543。安装到 Engine/Plugins/Marketplace 后已实测编辑器加载、Native MCP 启动于 127.0.0.1:3000、握手与 control_actor.list 只读查询；Mac 上的写入操作尚未验证。
 
 之后在 Mac 上已实测写入：蓝图创建与复制、组件、批量写图表、删节点与函数、生成 Actor、编辑器内 Python、PIE 与截图。其他写入能力首次使用后仍需检查结果。
+
+2026-10-31 Mac 从 v0.6.0 加上述补丁编译：Apple Silicon，UE 5.4.4，Xcode 27.0，RunUAT BuildPlugin -TargetPlatforms=Mac 成功，EngineWire、EngineWireFab、EngineWireValidation 均为 Universal dylib。安装到 Engine/Plugins/Marketplace 后已实测：编辑器加载、Native MCP 启动于 127.0.0.1:3000（serverInfo 版本 0.6.0）、原作用域令牌 helper 无需改动即可连接、search 找到 read_graph_as_code 与 write_graph_from_code、read_graph_as_code 读出蓝图事件图。
+
+蓝图文本读写修复（graph as code，上游 v0.6.0 与 dev 截至 2026-10-31 均未修复，各平台通用，代码在 Domains/BlueprintGraph/Code/）：
+
+8. 中文界面下常用分类（变量、工具|流程控制、类、游戏等）读出为中文、写入按英文匹配：CategoryText 经 FText::FindText("EditorCategoryUtils", 键) 换回引擎英文原文，读写两端统一用英文 id（McpGraphCodeCatalog.cpp）。
+9. Math Expression 的 id 里带括号时解析中断：符号可跨过成对的 (...)（McpGraphCodeParse.cpp，附测试）。
+10. 同名成员混淆（Manager 的 GetSlot 被当成控件的 GetSlot）：按函数或变量所属类匹配（MemberKey）。
+11. 菜单不提供的运算函数（vector * float 等）直接按函数建为普通 CallFunction 节点；原先经函数 spawner 建成可提升运算节点，接上 A 后按 vector * vector 选函数，B 改为浮点也不改回，读回 id 变化且可能断线（McpGraphCodeWriteNodes.cpp）。
+12. 写表达式时每接一个参数重新取引脚：Spawn Actor 的 Class 引脚会重建引脚，旧指针触发 Assertion failed: OwningNode 使编辑器崩溃（McpGraphCodeWriteExpr.cpp、McpGraphCodeWriteOps.cpp）。
+13. 一个纯函数输出被读两次（含同一语句内）时只在开头 bind 一次；排序穿过内联打印的纯函数节点查找依赖，先绑定被依赖的值，避免后面的文本把它整段重写、写回时多出节点（McpGraphCodeDecompile.cpp，附测试）。
+14. 多输出节点的非首个输出（GetSlot 的 Vel）按位置绑定为 (bind (_loc _vel) ...)；原先内联打印会被写回为第一个输出。
+15. (for i (range (+ e 1))) 写回时 e 直接接 LastIndex，不再生成 +1 再 -1 两个节点（McpGraphCodeWriteFlow.cpp）。
+
+2026-10-31 Mac 用含第 8–15 项的构建（rt7）验证：SoldierBurst 两个蓝图（54 节点/59 连线、110/131，含变量读写、多输出函数、ForLoop、Math Expression、vector*float）每段读出再写回，再读文本完全一致，节点与连线数不变，无孤立节点，编译通过。限制：含 SpawnActor<蓝图类> 这类菜单里没有的节点的段，只有保留 `; id` 注释时才能写回（复用原节点）。同日在 Mac 上还实测了材质创建与批量连节点、Niagara 拖尾创建、改参数、换渲染材质、加模块并在 PIE 中显示；Niagara 自定义模块只能经编辑器内 Python 建空模块资产再挂上，模块内部逻辑目前无法经 MCP 编写。Windows 发布包仍为 v0.6.0-beta-f，尚未按 v0.6.0 重新编译。
 
 本仓库不上传测试资产、私有场景、模型、专用动画、截图、认证文件或本机完整日志。

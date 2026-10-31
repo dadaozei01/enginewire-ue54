@@ -140,6 +140,13 @@ public:
       TSharedPtr<FMcpBridgeWebSocket>)>;
 
   bool RegisterHandler(const FString& Action, FAutomationHandler Handler);
+  // Runs Action's handler at once inside the request already running (a script's step), with none of the queue's
+  // checks: the caller has made them. False when no handler takes it.
+  bool RunHandlerInProcess(const FString& RequestId, const FString& Action, const TSharedPtr<FJsonObject>& Payload,
+                           TSharedPtr<FMcpBridgeWebSocket> Socket);
+  // Work that edits after its handler returned (a ticker) and then answers: run inside this, it gets the brackets a
+  // dispatch opens (error capture, change watch, undo ledger, journal), so its reply is enriched as a direct one is.
+  void RunLatentReply(const FString& RequestId, const FString& Action, TFunctionRef<void()> Work);
 
   struct FRequestErrorCapture
   {
@@ -158,6 +165,7 @@ public:
   void BeginErrorCapture();
   TArray<FString> EndErrorCapture();
   bool HasCapturedErrors() const;
+  int32 GetCapturedErrorCount() const;
   TArray<FString> GetCapturedErrorMessages() const;
   // Drops captured log lines a later step supersedes; that step logs again if it still fails.
   void ForgetCapturedMessages(TFunctionRef<bool(const FString&)> Matches);
@@ -202,6 +210,9 @@ public:
       const FString& RequestId,
       TFunction<void()> Callback);
   void ClearAutomationRequestCancellation(const FString& RequestId);
+  // A modal dialog runs its own loop, which never ticks the queue drain: every request still queued is answered
+  // EDITOR_MODAL_ACTIVE naming the dialog, without running. Returns how many were answered.
+  int32 AnswerQueuedRequestsDuringModal(const FString& DialogTitle);
 
   TSharedPtr<class FMcpConnectionManager> ConnectionManager;
   TSharedPtr<FMcpNativeTransport> NativeTransport;
@@ -257,6 +268,8 @@ private:
   void StopAcceptingAutomationRequests();
   void StartNativeTransport();
   void ReconcileLogCaptureDevice();
+  // Bound to FSlateApplication's modal-loop tick, which runs on the game thread while a dialog is up.
+  void OnModalLoopTick(float DeltaTime);
 
   MCP_SUBSYSTEM_PROPERTY_COLLECTION_DECLARATIONS
   MCP_SUBSYSTEM_ACTION_ROUTING_DECLARATIONS
